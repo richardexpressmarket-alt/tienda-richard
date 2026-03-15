@@ -13,6 +13,7 @@ import AdminProductos from './pages/admin/AdminProductos'
 import AdminCategorias from './pages/admin/AdminCategorias'
 import AdminVentas from './pages/admin/AdminVentas'
 import AdminUsuarios from './pages/admin/AdminUsuarios'
+import AdminPedidos from './pages/admin/AdminPedidos'
 import VendedorLayout from './pages/vendedor/VendedorLayout'
 import VendedorVenta from './pages/vendedor/VendedorVenta'
 import { Navigate } from 'react-router-dom'
@@ -66,6 +67,7 @@ export default function App() {
         <Route path="productos" element={<AdminProductos />} />
         <Route path="categorias" element={<AdminCategorias />} />
         <Route path="ventas" element={<AdminVentas />} />
+        <Route path="pedidos" element={<AdminPedidos />} />
         <Route path="usuarios" element={<AdminUsuarios />} />
       </Route>
 
