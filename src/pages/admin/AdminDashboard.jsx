@@ -9,15 +9,31 @@ export default function AdminDashboard() {
   useEffect(() => { cargar() }, [])
 
   async function cargar() {
-    const hoy = new Date(); hoy.setHours(0, 0, 0, 0)
-    const [{ count: productos }, { count: categorias }, { data: ventas }, { data: stock_bajo }] = await Promise.all([
+    const hoy = new Date()
+    hoy.setHours(0, 0, 0, 0)
+
+    const [
+      { count: productos },
+      { count: categorias },
+      { data: ventas },
+      { data: todos_productos }
+    ] = await Promise.all([
       supabase.from('productos').select('*', { count: 'exact', head: true }),
       supabase.from('categorias').select('*', { count: 'exact', head: true }),
       supabase.from('ventas').select('total').gte('created_at', hoy.toISOString()),
-      supabase.from('productos').select('nombre, stock, stock_minimo').lt('stock', supabase.raw('stock_minimo')).eq('activo', true),
+      supabase.from('productos').select('nombre, stock, stock_minimo').eq('activo', true),
     ])
+
     const total_hoy = (ventas || []).reduce((a, v) => a + Number(v.total), 0)
-    setStats({ productos: productos || 0, categorias: categorias || 0, ventas_hoy: (ventas || []).length, total_hoy, stock_bajo: stock_bajo || [] })
+    const stock_bajo = (todos_productos || []).filter(p => p.stock < p.stock_minimo)
+
+    setStats({
+      productos: productos || 0,
+      categorias: categorias || 0,
+      ventas_hoy: (ventas || []).length,
+      total_hoy,
+      stock_bajo
+    })
     setCargando(false)
   }
 
