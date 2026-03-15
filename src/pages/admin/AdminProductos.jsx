@@ -77,7 +77,7 @@ export default function AdminProductos() {
   function handleImagen(e) {
     const file = e.target.files[0]
     if (!file) return
-    if (file.size > 3 * 1024 * 1024) return toast.error('Imagen máx. 3MB')
+    if (file.size > 10 * 1024 * 1024) return toast.error('Imagen máx. 10MB')
     setImagenFile(file)
     setImagenPreview(URL.createObjectURL(file))
   }
