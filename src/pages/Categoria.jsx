@@ -11,7 +11,16 @@ export default function Categoria() {
   const [productos, setProductos] = useState([])
   const [cargando, setCargando] = useState(true)
 
-  useEffect(() => { cargar() }, [id])
+  useEffect(() => {
+  cargar()
+
+  const canal = supabase
+    .channel('cambios-categoria')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'productos' }, () => cargar())
+    .subscribe()
+
+  return () => supabase.removeChannel(canal)
+}, [id])
 
   async function cargar() {
     setCargando(true)
