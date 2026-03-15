@@ -81,12 +81,12 @@ export default function Carrito() {
               </div>
 
               <button onClick={handleComprar} className="btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '14px', fontSize: 15, borderRadius: 12, gap: 10 }}>
-                <MessageCircle size={18} />
-                Pedir por WhatsApp
-              </button>
-              <p style={{ fontSize: 12, color: 'var(--texto-suave)', textAlign: 'center', marginTop: 10 }}>
-                Se abrirá WhatsApp con tu pedido listo para enviar
-              </p>
+  <MessageCircle size={18} />
+  Pedir por WhatsApp
+</button>
+<p style={{ fontSize: 12, color: 'var(--texto-suave)', textAlign: 'center', marginTop: 10 }}>
+  Se abrirá WhatsApp con tu pedido listo para enviar
+</p>
 
               <button onClick={() => { if (confirm('¿Vaciar carrito?')) limpiar() }}
                 style={{ display: 'block', margin: '12px auto 0', background: 'none', border: 'none', fontSize: 12, color: 'var(--texto-suave)', cursor: 'pointer', textDecoration: 'underline' }}>
