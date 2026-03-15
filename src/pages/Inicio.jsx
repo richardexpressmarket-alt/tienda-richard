@@ -91,7 +91,7 @@ export default function Inicio() {
                 </h2>
               </div>
               {cargando ? <div className="spinner" /> : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 12 }}>
+                <div className="grid-categorias" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 12 }}>
                   {categorias.map(cat => (
                     <Link key={cat.id} to={`/categoria/${cat.id}`}
                       style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'var(--blanco)', borderRadius: 14, border: '1px solid var(--borde)', overflow: 'hidden', transition: 'all 0.18s', textAlign: 'center' }}
@@ -130,7 +130,7 @@ export default function Inicio() {
                 <p>No se encontraron productos</p>
               </div>
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 14 }}>
+              <div className="grid-productos" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 14 }}>
                 {productosFiltrados.map(p => <ProductoCard key={p.id} producto={p} />)}
               </div>
             )}
