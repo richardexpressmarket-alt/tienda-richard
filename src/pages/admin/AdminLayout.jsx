@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Package, Tag, ShoppingBag, Users, LogOut, Store, Menu, X } from 'lucide-react'
+import { LayoutDashboard, Package, Tag, ShoppingBag, Users, LogOut, Store, Menu, X, MessageCircle } from 'lucide-react'
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../store'
@@ -9,6 +9,7 @@ const menu = [
   { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, exact: true },
   { to: '/admin/productos', label: 'Productos', icon: Package },
   { to: '/admin/categorias', label: 'Categorías', icon: Tag },
+  { to: '/admin/pedidos', label: 'Pedidos WhatsApp', icon: MessageCircle },
   { to: '/admin/ventas', label: 'Ventas', icon: ShoppingBag },
   { to: '/admin/usuarios', label: 'Usuarios', icon: Users },
 ]
