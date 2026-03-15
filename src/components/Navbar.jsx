@@ -1,16 +1,17 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ShoppingCart, Search, Menu, X, LogIn, LayoutDashboard, Store } from 'lucide-react'
+import { ShoppingCart, Search, LogIn, LayoutDashboard, Store } from 'lucide-react'
 import { useCarrito, useAuth } from '../store'
 import { supabase } from '../lib/supabase'
 import toast from 'react-hot-toast'
 
 export default function Navbar({ onBuscar }) {
-  const [menuAbierto, setMenuAbierto] = useState(false)
   const [busqueda, setBusqueda] = useState('')
-  const cantidad = useCarrito(s => s.cantidad())
+  const items = useCarrito(s => s.items)
   const { perfil, usuario } = useAuth()
   const navigate = useNavigate()
+
+  const totalItems = items.reduce((a, i) => a + i.cantidad, 0)
 
   function handleBuscar(e) {
     const val = e.target.value
@@ -26,7 +27,7 @@ export default function Navbar({ onBuscar }) {
 
   return (
     <header style={{ background: 'var(--blanco)', borderBottom: '1px solid var(--borde)', position: 'sticky', top: 0, zIndex: 100, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
-      <div className="page-wrap" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '0 16px', height: 64 }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 12, padding: '0 16px', height: 64 }}>
 
         {/* Logo */}
         <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
@@ -38,10 +39,10 @@ export default function Navbar({ onBuscar }) {
           </span>
         </Link>
 
-        {/* Buscador desktop */}
+        {/* Buscador */}
         {onBuscar && (
           <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center', maxWidth: 500, margin: '0 auto' }}>
-            <Search size={16} style={{ position: 'absolute', left: 12, color: 'var(--texto-suave)', flexShrink: 0 }} />
+            <Search size={16} style={{ position: 'absolute', left: 12, color: 'var(--texto-suave)' }} />
             <input
               value={busqueda}
               onChange={handleBuscar}
@@ -73,11 +74,24 @@ export default function Navbar({ onBuscar }) {
             </Link>
           )}
 
-          <Link to="/carrito" style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 42, height: 42, borderRadius: 10, background: cantidad > 0 ? 'var(--naranja-light)' : 'var(--fondo)', border: '1.5px solid var(--borde)', color: cantidad > 0 ? 'var(--naranja)' : 'var(--texto-suave)', transition: 'all 0.2s' }}>
+          <Link to="/carrito" style={{
+            position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            width: 42, height: 42, borderRadius: 10,
+            background: totalItems > 0 ? 'var(--naranja-light)' : 'var(--fondo)',
+            border: '1.5px solid var(--borde)',
+            color: totalItems > 0 ? 'var(--naranja)' : 'var(--texto-suave)',
+            transition: 'all 0.2s'
+          }}>
             <ShoppingCart size={20} />
-            {cantidad > 0 && (
-              <span style={{ position: 'absolute', top: -6, right: -6, background: 'var(--naranja)', color: 'white', borderRadius: '50%', width: 20, height: 20, fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {cantidad()}
+            {totalItems > 0 && (
+              <span style={{
+                position: 'absolute', top: -6, right: -6,
+                background: 'var(--naranja)', color: 'white',
+                borderRadius: '50%', width: 20, height: 20,
+                fontSize: 11, fontWeight: 700,
+                display: 'flex', alignItems: 'center', justifyContent: 'center'
+              }}>
+                {totalItems}
               </span>
             )}
           </Link>
