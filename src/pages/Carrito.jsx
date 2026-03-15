@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom'
 import { useCarrito } from '../store'
 import Navbar from '../components/Navbar'
 import { Trash2, Plus, Minus, ShoppingCart, MessageCircle, ChevronLeft, Package, MapPin, Store } from 'lucide-react'
+import { supabase } from '../lib/supabase'
+import toast from 'react-hot-toast'
 
 const WA_NUMBER = import.meta.env.VITE_WHATSAPP || '51924545856'
 
@@ -13,30 +15,66 @@ export default function Carrito() {
   const [direccion, setDireccion] = useState('')
   const [referencia, setReferencia] = useState('')
   const [telefono, setTelefono] = useState('')
+  const [enviando, setEnviando] = useState(false)
 
-  function handleComprar() {
+  async function handleComprar() {
     if (items.length === 0) return
-    if (!nombre.trim()) return alert('Por favor escribe tu nombre')
-    if (tipoEntrega === 'delivery' && !direccion.trim()) return alert('Por favor escribe tu dirección')
+    if (!nombre.trim()) return toast.error('Por favor escribe tu nombre')
+    if (tipoEntrega === 'delivery' && !direccion.trim()) return toast.error('Por favor escribe tu dirección')
 
-    const lineas = items.map(i =>
-      `• ${i.nombre} x${i.cantidad} = S/ ${(i.precio * i.cantidad).toFixed(2)}`
-    ).join('\n')
+    setEnviando(true)
+    try {
+      // Guardar pedido en Supabase como pendiente
+      const { error } = await supabase.from('pedidos').insert({
+        nombre_cliente: nombre.trim(),
+        telefono_cliente: telefono || null,
+        tipo_entrega: tipoEntrega,
+        direccion: direccion || null,
+        referencia: referencia || null,
+        items: items.map(i => ({
+          id: i.id,
+          nombre: i.nombre,
+          precio: i.precio,
+          cantidad: i.cantidad,
+          subtotal: i.precio * i.cantidad,
+          imagen_url: i.imagen_url || null
+        })),
+        total: total(),
+        estado: 'pendiente'
+      })
+      if (error) throw error
 
-    const entregaInfo = tipoEntrega === 'delivery'
-      ? `\n📍 *Delivery a:* ${direccion}${referencia ? ` (${referencia})` : ''}`
-      : `\n🏪 *Recojo en tienda*`
+      // Armar mensaje de WhatsApp
+      const lineas = items.map(i =>
+        `• ${i.nombre} x${i.cantidad} = S/ ${(i.precio * i.cantidad).toFixed(2)}`
+      ).join('\n')
 
-    const msg =
-      `¡Hola! Quiero hacer un pedido 🛒\n\n` +
-      `👤 *Nombre:* ${nombre}\n` +
-      `📱 *Teléfono:* ${telefono || 'No indicado'}\n` +
-      entregaInfo +
-      `\n\n*Productos:*\n${lineas}\n\n` +
-      `💰 *Total: S/ ${total().toFixed(2)}*\n\n` +
-      `¿Está disponible?`
+      const entregaInfo = tipoEntrega === 'delivery'
+        ? `\n📍 *Delivery a:* ${direccion}${referencia ? ` (${referencia})` : ''}`
+        : `\n🏪 *Recojo en tienda*`
 
-    window.open(`https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(msg)}`, '_blank')
+      const msg =
+        `¡Hola! Quiero hacer un pedido 🛒\n\n` +
+        `👤 *Nombre:* ${nombre}\n` +
+        `📱 *Teléfono:* ${telefono || 'No indicado'}\n` +
+        entregaInfo +
+        `\n\n*Productos:*\n${lineas}\n\n` +
+        `💰 *Total: S/ ${total().toFixed(2)}*\n\n` +
+        `¿Está disponible?`
+
+      limpiar()
+      setNombre('')
+      setTelefono('')
+      setDireccion('')
+      setReferencia('')
+      toast.success('¡Pedido enviado! Redirigiendo a WhatsApp...')
+      setTimeout(() => {
+        window.open(`https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(msg)}`, '_blank')
+      }, 800)
+    } catch (e) {
+      toast.error('Error al registrar pedido: ' + e.message)
+    }
+    setEnviando(false)
   }
 
   return (
@@ -98,9 +136,7 @@ export default function Carrito() {
 
             {/* Datos del cliente */}
             <div className="card" style={{ padding: '20px' }}>
-              <h3 style={{ fontFamily: 'var(--fuente-display)', fontSize: 16, fontWeight: 700, marginBottom: 14 }}>
-                Tus datos
-              </h3>
+              <h3 style={{ fontFamily: 'var(--fuente-display)', fontSize: 16, fontWeight: 700, marginBottom: 14 }}>Tus datos</h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <div>
                   <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 5, display: 'block' }}>Nombre completo *</label>
@@ -118,17 +154,13 @@ export default function Carrito() {
               <h3 style={{ fontFamily: 'var(--fuente-display)', fontSize: 16, fontWeight: 700, marginBottom: 14 }}>
                 ¿Cómo quieres recibir tu pedido?
               </h3>
-
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
-                {/* Recojo */}
                 <button onClick={() => setTipoEntrega('recojo')}
                   style={{ padding: '14px', borderRadius: 12, border: `2px solid ${tipoEntrega === 'recojo' ? 'var(--naranja)' : 'var(--borde)'}`, background: tipoEntrega === 'recojo' ? 'var(--naranja-light)' : 'var(--blanco)', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, transition: 'all 0.18s' }}>
                   <Store size={24} color={tipoEntrega === 'recojo' ? 'var(--naranja)' : 'var(--texto-suave)'} />
                   <span style={{ fontSize: 14, fontWeight: 600, color: tipoEntrega === 'recojo' ? 'var(--naranja)' : 'var(--texto)' }}>Recojo en tienda</span>
                   <span style={{ fontSize: 11, color: 'var(--texto-suave)' }}>Gratis</span>
                 </button>
-
-                {/* Delivery */}
                 <button onClick={() => setTipoEntrega('delivery')}
                   style={{ padding: '14px', borderRadius: 12, border: `2px solid ${tipoEntrega === 'delivery' ? 'var(--naranja)' : 'var(--borde)'}`, background: tipoEntrega === 'delivery' ? 'var(--naranja-light)' : 'var(--blanco)', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, transition: 'all 0.18s' }}>
                   <MapPin size={24} color={tipoEntrega === 'delivery' ? 'var(--naranja)' : 'var(--texto-suave)'} />
@@ -136,8 +168,6 @@ export default function Carrito() {
                   <span style={{ fontSize: 11, color: 'var(--texto-suave)' }}>A coordinar</span>
                 </button>
               </div>
-
-              {/* Campos de delivery */}
               {tipoEntrega === 'delivery' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '14px', background: 'var(--naranja-light)', borderRadius: 10 }}>
                   <div>
@@ -152,34 +182,30 @@ export default function Carrito() {
               )}
             </div>
 
-            {/* Resumen y botón */}
+            {/* Resumen */}
             <div className="card" style={{ padding: '20px 24px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <span style={{ fontSize: 14, color: 'var(--texto-suave)' }}>
-                  Subtotal ({items.reduce((a, i) => a + i.cantidad, 0)} productos)
-                </span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ fontSize: 14, color: 'var(--texto-suave)' }}>Subtotal ({items.reduce((a, i) => a + i.cantidad, 0)} productos)</span>
                 <span style={{ fontSize: 14 }}>S/ {total().toFixed(2)}</span>
               </div>
               {tipoEntrega === 'delivery' && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                   <span style={{ fontSize: 14, color: 'var(--texto-suave)' }}>Delivery</span>
-                  <span style={{ fontSize: 13, color: 'var(--naranja)' }}>A coordinar por WhatsApp</span>
+                  <span style={{ fontSize: 13, color: 'var(--naranja)' }}>A coordinar</span>
                 </div>
               )}
               <div style={{ borderTop: '1px solid var(--borde)', paddingTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
                 <span style={{ fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 18 }}>Total</span>
                 <span style={{ fontFamily: 'var(--fuente-display)', fontWeight: 800, fontSize: 22, color: 'var(--naranja)' }}>S/ {total().toFixed(2)}</span>
               </div>
-
-              <button onClick={handleComprar} className="btn-primary"
-                style={{ width: '100%', justifyContent: 'center', padding: '14px', fontSize: 15, borderRadius: 12, gap: 10 }}>
+              <button onClick={handleComprar} disabled={enviando} className="btn-primary"
+                style={{ width: '100%', justifyContent: 'center', padding: '14px', fontSize: 15, borderRadius: 12, gap: 10, opacity: enviando ? 0.7 : 1 }}>
                 <MessageCircle size={18} />
-                {tipoEntrega === 'delivery' ? 'Pedir con delivery por WhatsApp' : 'Pedir y recoger en tienda'}
+                {enviando ? 'Registrando pedido...' : tipoEntrega === 'delivery' ? 'Pedir con delivery por WhatsApp' : 'Pedir y recoger en tienda'}
               </button>
               <p style={{ fontSize: 12, color: 'var(--texto-suave)', textAlign: 'center', marginTop: 10 }}>
-                Se abrirá WhatsApp con tu pedido completo
+                Tu pedido quedará registrado y se abrirá WhatsApp
               </p>
-
               <button onClick={() => { if (confirm('¿Vaciar carrito?')) limpiar() }}
                 style={{ display: 'block', margin: '12px auto 0', background: 'none', border: 'none', fontSize: 12, color: 'var(--texto-suave)', cursor: 'pointer', textDecoration: 'underline' }}>
                 Vaciar carrito
