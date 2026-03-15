@@ -63,6 +63,10 @@ export default function Login() {
 
         <div style={{ textAlign: 'center', marginTop: 20 }}>
           <Link to="/" style={{ fontSize: 13, color: 'var(--texto-suave)' }}>← Volver a la tienda</Link>
+<button onClick={() => setModo(modo === 'login' ? 'registro' : 'login')} 
+  style={{ fontSize: 13, color: 'var(--naranja)', background: 'none', border: 'none', cursor: 'pointer', marginTop: 8 }}>
+  {modo === 'login' ? '¿No tienes cuenta? Regístrate' : '¿Ya tienes cuenta? Inicia sesión'}
+</button>
         </div>
       </div>
     </div>
