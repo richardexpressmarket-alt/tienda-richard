@@ -15,8 +15,16 @@ export default function Inicio() {
   const busRef = useRef()
 
   useEffect(() => {
-    cargar()
-  }, [])
+  cargar()
+
+  const canal = supabase
+    .channel('cambios-tienda')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'productos' }, () => cargar())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'categorias' }, () => cargar())
+    .subscribe()
+
+  return () => supabase.removeChannel(canal)
+}, [])
 
   async function cargar() {
     setCargando(true)
