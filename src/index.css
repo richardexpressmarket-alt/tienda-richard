@@ -125,3 +125,31 @@ img { max-width: 100%; display: block; }
 @media (max-width: 600px) {
   .page-wrap { padding: 0 12px; }
 }
+
+
+/* ===== MEJORAS MÓVIL ===== */
+@media (max-width: 600px) {
+  /* Navbar más compacto */
+  .page-wrap { padding: 0 10px; }
+
+  /* Grid de categorías: 3 por fila en móvil */
+  .grid-categorias {
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  /* Grid de productos: 2 por fila en móvil */
+  .grid-productos {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+  }
+
+  /* Carrito: ocultar precio individual en móvil */
+  .precio-individual { display: none; }
+
+  /* Botones más grandes para dedos */
+  .btn-primary { padding: 13px 18px !important; font-size: 15px !important; }
+
+  /* Cards de producto más compactas */
+  .card { border-radius: 10px !important; }
+}
