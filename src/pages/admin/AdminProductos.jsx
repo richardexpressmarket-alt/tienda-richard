@@ -1,0 +1,276 @@
+import { useState, useEffect, useRef } from 'react'
+import { supabase } from '../../lib/supabase'
+import { Plus, Pencil, Trash2, Upload, X, Package, Search } from 'lucide-react'
+import toast from 'react-hot-toast'
+
+const vacioForm = {
+  nombre: '', descripcion: '', precio: '', precio_oferta: '',
+  unidad: 'unidad', stock: 0, stock_minimo: 5,
+  categoria_id: '', activo: true, codigo_barras: ''
+}
+
+const UNIDADES = ['unidad', 'kg', 'g', '500g', '250g', 'litro', '500ml', '250ml', 'docena', 'paquete', 'caja', 'bolsa']
+
+export default function AdminProductos() {
+  const [productos, setProductos] = useState([])
+  const [categorias, setCategorias] = useState([])
+  const [form, setForm] = useState(vacioForm)
+  const [editando, setEditando] = useState(null)
+  const [modalAbierto, setModalAbierto] = useState(false)
+  const [subiendo, setSubiendo] = useState(false)
+  const [cargando, setCargando] = useState(true)
+  const [imagenPreview, setImagenPreview] = useState(null)
+  const [imagenFile, setImagenFile] = useState(null)
+  const [busqueda, setBusqueda] = useState('')
+  const [filtroCat, setFiltroCat] = useState('')
+  const inputRef = useRef()
+
+  useEffect(() => { cargar() }, [])
+
+  async function cargar() {
+    const [{ data: prods }, { data: cats }] = await Promise.all([
+      supabase.from('productos').select('*, categorias(nombre)').order('nombre'),
+      supabase.from('categorias').select('id, nombre').eq('activo', true).order('nombre'),
+    ])
+    setProductos(prods || [])
+    setCategorias(cats || [])
+    setCargando(false)
+  }
+
+  function abrirNuevo() {
+    setForm(vacioForm)
+    setEditando(null)
+    setImagenPreview(null)
+    setImagenFile(null)
+    setModalAbierto(true)
+  }
+
+  function abrirEditar(p) {
+    setForm({
+      nombre: p.nombre, descripcion: p.descripcion || '',
+      precio: p.precio, precio_oferta: p.precio_oferta || '',
+      unidad: p.unidad, stock: p.stock, stock_minimo: p.stock_minimo,
+      categoria_id: p.categoria_id || '', activo: p.activo, codigo_barras: p.codigo_barras || ''
+    })
+    setEditando(p)
+    setImagenPreview(p.imagen_url || null)
+    setImagenFile(null)
+    setModalAbierto(true)
+  }
+
+  function handleImagen(e) {
+    const file = e.target.files[0]
+    if (!file) return
+    if (file.size > 3 * 1024 * 1024) return toast.error('Imagen máx. 3MB')
+    setImagenFile(file)
+    setImagenPreview(URL.createObjectURL(file))
+  }
+
+  async function subirImagen(file, nombre) {
+    const ext = file.name.split('.').pop()
+    const path = `productos/${Date.now()}_${nombre.replace(/\s/g, '_')}.${ext}`
+    const { error } = await supabase.storage.from('imagenes').upload(path, file, { upsert: true })
+    if (error) throw error
+    const { data } = supabase.storage.from('imagenes').getPublicUrl(path)
+    return data.publicUrl
+  }
+
+  async function handleGuardar() {
+    if (!form.nombre.trim()) return toast.error('El nombre es obligatorio')
+    if (!form.precio || isNaN(form.precio)) return toast.error('El precio debe ser un número')
+    setSubiendo(true)
+    try {
+      let imagen_url = editando?.imagen_url || null
+      if (imagenFile) imagen_url = await subirImagen(imagenFile, form.nombre)
+      const payload = {
+        ...form,
+        precio: Number(form.precio),
+        precio_oferta: form.precio_oferta ? Number(form.precio_oferta) : null,
+        stock: Number(form.stock),
+        stock_minimo: Number(form.stock_minimo),
+        categoria_id: form.categoria_id || null,
+        codigo_barras: form.codigo_barras || null,
+        imagen_url,
+        updated_at: new Date().toISOString()
+      }
+      if (editando) {
+        const { error } = await supabase.from('productos').update(payload).eq('id', editando.id)
+        if (error) throw error
+        toast.success('Producto actualizado')
+      } else {
+        const { error } = await supabase.from('productos').insert(payload)
+        if (error) throw error
+        toast.success('Producto creado')
+      }
+      setModalAbierto(false)
+      cargar()
+    } catch (e) {
+      toast.error('Error: ' + e.message)
+    }
+    setSubiendo(false)
+  }
+
+  async function handleEliminar(p) {
+    if (!confirm(`¿Eliminar "${p.nombre}"?`)) return
+    const { error } = await supabase.from('productos').delete().eq('id', p.id)
+    if (error) return toast.error('Error al eliminar')
+    toast.success('Producto eliminado')
+    cargar()
+  }
+
+  const filtrados = productos.filter(p => {
+    const matchBusq = p.nombre.toLowerCase().includes(busqueda.toLowerCase())
+    const matchCat = filtroCat ? p.categoria_id === filtroCat : true
+    return matchBusq && matchCat
+  })
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
+        <h1 style={{ fontFamily: 'var(--fuente-display)', fontSize: 24, fontWeight: 800 }}>
+          Productos<span style={{ color: 'var(--naranja)' }}>.</span>
+        </h1>
+        <button onClick={abrirNuevo} className="btn-primary"><Plus size={16} /> Nuevo producto</button>
+      </div>
+
+      {/* Filtros */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+        <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
+          <Search size={14} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--texto-suave)' }} />
+          <input value={busqueda} onChange={e => setBusqueda(e.target.value)} placeholder="Buscar producto..." style={{ paddingLeft: 32 }} />
+        </div>
+        <select value={filtroCat} onChange={e => setFiltroCat(e.target.value)} style={{ minWidth: 160 }}>
+          <option value="">Todas las categorías</option>
+          {categorias.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+        </select>
+      </div>
+
+      <p style={{ fontSize: 13, color: 'var(--texto-suave)', marginBottom: 14 }}>{filtrados.length} productos</p>
+
+      {cargando ? <div className="spinner" /> : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {filtrados.map(p => (
+            <div key={p.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 16px' }}>
+              {p.imagen_url
+                ? <img src={p.imagen_url} alt={p.nombre} style={{ width: 52, height: 52, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }} />
+                : <div style={{ width: 52, height: 52, borderRadius: 10, background: 'var(--fondo)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <Package size={22} color="var(--borde)" />
+                  </div>
+              }
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontWeight: 600, fontSize: 14 }}>{p.nombre}</p>
+                <p style={{ fontSize: 12, color: 'var(--texto-suave)' }}>{p.categorias?.nombre || 'Sin categoría'} · {p.unidad}</p>
+              </div>
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <p style={{ fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 16, color: 'var(--naranja)' }}>S/ {Number(p.precio).toFixed(2)}</p>
+                <p style={{ fontSize: 12, color: p.stock <= p.stock_minimo ? '#E65100' : 'var(--texto-suave)' }}>Stock: {p.stock}</p>
+              </div>
+              <span className={`badge ${p.activo ? 'badge-verde' : 'badge-gris'}`} style={{ flexShrink: 0 }}>{p.activo ? 'Activo' : 'Inactivo'}</span>
+              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                <button onClick={() => abrirEditar(p)} className="btn-ghost" style={{ padding: '7px 10px' }}><Pencil size={14} /></button>
+                <button onClick={() => handleEliminar(p)} className="btn-danger" style={{ padding: '7px 10px' }}><Trash2 size={14} /></button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Modal */}
+      {modalAbierto && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div className="card" style={{ width: '100%', maxWidth: 560, padding: '24px', maxHeight: '92vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+              <h2 style={{ fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 18 }}>
+                {editando ? 'Editar producto' : 'Nuevo producto'}
+              </h2>
+              <button onClick={() => setModalAbierto(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--texto-suave)' }}><X size={20} /></button>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div style={{ gridColumn: '1/-1' }}>
+                <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Nombre *</label>
+                <input value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej: Arroz Extra 1kg" />
+              </div>
+              <div style={{ gridColumn: '1/-1' }}>
+                <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Descripción</label>
+                <input value={form.descripcion} onChange={e => setForm({ ...form, descripcion: e.target.value })} placeholder="Descripción opcional" />
+              </div>
+              <div>
+                <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Precio (S/) *</label>
+                <input type="number" min="0" step="0.01" value={form.precio} onChange={e => setForm({ ...form, precio: e.target.value })} placeholder="0.00" />
+              </div>
+              <div>
+                <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Precio oferta (S/)</label>
+                <input type="number" min="0" step="0.01" value={form.precio_oferta} onChange={e => setForm({ ...form, precio_oferta: e.target.value })} placeholder="Dejar vacío si no hay" />
+              </div>
+              <div>
+                <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Unidad de medida</label>
+                <select value={form.unidad} onChange={e => setForm({ ...form, unidad: e.target.value })}>
+                  {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Categoría</label>
+                <select value={form.categoria_id} onChange={e => setForm({ ...form, categoria_id: e.target.value })}>
+                  <option value="">Sin categoría</option>
+                  {categorias.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Stock actual</label>
+                <input type="number" min="0" value={form.stock} onChange={e => setForm({ ...form, stock: e.target.value })} />
+              </div>
+              <div>
+                <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Stock mínimo (alerta)</label>
+                <input type="number" min="0" value={form.stock_minimo} onChange={e => setForm({ ...form, stock_minimo: e.target.value })} />
+              </div>
+              <div style={{ gridColumn: '1/-1' }}>
+                <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Código de barras (opcional)</label>
+                <input value={form.codigo_barras} onChange={e => setForm({ ...form, codigo_barras: e.target.value })} placeholder="Para uso futuro con lector" />
+              </div>
+
+              {/* Imagen */}
+              <div style={{ gridColumn: '1/-1' }}>
+                <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 8, display: 'block' }}>Foto del producto</label>
+                <input ref={inputRef} type="file" accept="image/*" onChange={handleImagen} style={{ display: 'none' }} />
+                {imagenPreview ? (
+                  <div style={{ position: 'relative', borderRadius: 10, overflow: 'hidden', border: '1px solid var(--borde)', height: 160 }}>
+                    <img src={imagenPreview} alt="preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <button onClick={() => { setImagenPreview(null); setImagenFile(null) }}
+                      style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.5)', border: 'none', borderRadius: '50%', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'white' }}>
+                      <X size={14} />
+                    </button>
+                    <button onClick={() => inputRef.current.click()}
+                      style={{ position: 'absolute', bottom: 8, right: 8, background: 'rgba(0,0,0,0.5)', border: 'none', borderRadius: 8, padding: '5px 10px', cursor: 'pointer', color: 'white', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <Upload size={12} /> Cambiar foto
+                    </button>
+                  </div>
+                ) : (
+                  <button onClick={() => inputRef.current.click()}
+                    style={{ width: '100%', height: 120, border: '2px dashed var(--borde)', borderRadius: 10, background: 'var(--fondo)', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, color: 'var(--texto-suave)' }}
+                    onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--naranja)'}
+                    onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--borde)'}>
+                    <Upload size={22} />
+                    <span style={{ fontSize: 13 }}>Subir foto del producto</span>
+                  </button>
+                )}
+              </div>
+
+              <div style={{ gridColumn: '1/-1', display: 'flex', alignItems: 'center', gap: 10 }}>
+                <input type="checkbox" id="activop" checked={form.activo} onChange={e => setForm({ ...form, activo: e.target.checked })} style={{ width: 16, height: 16 }} />
+                <label htmlFor="activop" style={{ fontSize: 13, cursor: 'pointer' }}>Producto activo (visible en la tienda)</label>
+              </div>
+
+              <div style={{ gridColumn: '1/-1', display: 'flex', gap: 10, marginTop: 4 }}>
+                <button onClick={() => setModalAbierto(false)} className="btn-ghost" style={{ flex: 1, justifyContent: 'center' }}>Cancelar</button>
+                <button onClick={handleGuardar} className="btn-primary" disabled={subiendo} style={{ flex: 1, justifyContent: 'center', opacity: subiendo ? 0.7 : 1 }}>
+                  {subiendo ? 'Guardando...' : editando ? 'Guardar cambios' : 'Crear producto'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
