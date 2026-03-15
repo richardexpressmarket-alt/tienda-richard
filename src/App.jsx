@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route } from 'react-router-dom'
 import { supabase } from './lib/supabase'
 import { useAuth } from './store'
 
@@ -15,6 +15,7 @@ import AdminVentas from './pages/admin/AdminVentas'
 import AdminUsuarios from './pages/admin/AdminUsuarios'
 import VendedorLayout from './pages/vendedor/VendedorLayout'
 import VendedorVenta from './pages/vendedor/VendedorVenta'
+import { Navigate } from 'react-router-dom'
 
 function RutaProtegida({ children, rol }) {
   const { perfil } = useAuth()
@@ -33,7 +34,6 @@ export default function App() {
         cargarPerfil(session.user.id)
       }
     })
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         setUsuario(session.user)
@@ -42,7 +42,6 @@ export default function App() {
         logout()
       }
     })
-
     return () => subscription.unsubscribe()
   }, [])
 
@@ -53,11 +52,13 @@ export default function App() {
 
   return (
     <Routes>
+      {/* RUTAS PÚBLICAS — sin login */}
       <Route path="/" element={<Inicio />} />
       <Route path="/categoria/:id" element={<Categoria />} />
       <Route path="/carrito" element={<Carrito />} />
       <Route path="/login" element={<Login />} />
 
+      {/* RUTAS PROTEGIDAS — solo admin */}
       <Route path="/admin" element={
         <RutaProtegida rol="admin"><AdminLayout /></RutaProtegida>
       }>
@@ -68,6 +69,7 @@ export default function App() {
         <Route path="usuarios" element={<AdminUsuarios />} />
       </Route>
 
+      {/* RUTAS PROTEGIDAS — vendedor */}
       <Route path="/vendedor" element={
         <RutaProtegida rol="vendedor"><VendedorLayout /></RutaProtegida>
       }>
