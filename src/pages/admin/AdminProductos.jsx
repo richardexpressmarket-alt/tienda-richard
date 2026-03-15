@@ -5,11 +5,11 @@ import toast from 'react-hot-toast'
 
 const vacioForm = {
   nombre: '', descripcion: '', precio: '', precio_oferta: '',
-  unidad: 'unidad', stock: 0, stock_minimo: 5,
+  unidad: 'unidad', cantidad_unidad: '', stock: 0, stock_minimo: 5,
   categoria_id: '', activo: true, codigo_barras: ''
 }
 
-const UNIDADES = ['unidad', 'kg', 'g', '500g', '250g', 'litro', '500ml', '250ml', 'docena', 'paquete', 'caja', 'bolsa']
+const UNIDADES = ['unidad', 'kg', 'g', 'lt', 'ml', 'docena', 'paquete', 'caja', 'bolsa']
 
 export default function AdminProductos() {
   const [productos, setProductos] = useState([])
@@ -37,6 +37,12 @@ export default function AdminProductos() {
     setCargando(false)
   }
 
+  // Genera la etiqueta de unidad con cantidad: "3 kg", "500 ml", etc.
+  function etiquetaUnidad(unidad, cantidad) {
+    if (!cantidad) return unidad
+    return `${cantidad} ${unidad}`
+  }
+
   function abrirNuevo() {
     setForm(vacioForm)
     setEditando(null)
@@ -46,11 +52,21 @@ export default function AdminProductos() {
   }
 
   function abrirEditar(p) {
+    // Separar cantidad y unidad si ya tiene formato "3 kg"
+    const partes = p.unidad ? p.unidad.split(' ') : []
+    const tieneNumero = partes.length === 2 && !isNaN(partes[0])
     setForm({
-      nombre: p.nombre, descripcion: p.descripcion || '',
-      precio: p.precio, precio_oferta: p.precio_oferta || '',
-      unidad: p.unidad, stock: p.stock, stock_minimo: p.stock_minimo,
-      categoria_id: p.categoria_id || '', activo: p.activo, codigo_barras: p.codigo_barras || ''
+      nombre: p.nombre,
+      descripcion: p.descripcion || '',
+      precio: p.precio,
+      precio_oferta: p.precio_oferta || '',
+      unidad: tieneNumero ? partes[1] : p.unidad,
+      cantidad_unidad: tieneNumero ? partes[0] : '',
+      stock: p.stock,
+      stock_minimo: p.stock_minimo,
+      categoria_id: p.categoria_id || '',
+      activo: p.activo,
+      codigo_barras: p.codigo_barras || ''
     })
     setEditando(p)
     setImagenPreview(p.imagen_url || null)
@@ -78,21 +94,42 @@ export default function AdminProductos() {
   async function handleGuardar() {
     if (!form.nombre.trim()) return toast.error('El nombre es obligatorio')
     if (!form.precio || isNaN(form.precio)) return toast.error('El precio debe ser un número')
+
+    // Construir unidad final con cantidad
+    const unidadFinal = etiquetaUnidad(form.unidad, form.cantidad_unidad)
+
+    // Verificar duplicado: mismo nombre + misma unidad (ignorando mayúsculas)
+    const duplicado = productos.find(p => {
+      if (editando && p.id === editando.id) return false
+      const mismoNombre = p.nombre.toLowerCase().trim() === form.nombre.toLowerCase().trim()
+      const mismaUnidad = p.unidad?.toLowerCase().trim() === unidadFinal.toLowerCase().trim()
+      return mismoNombre && mismaUnidad
+    })
+
+    if (duplicado) {
+      return toast.error(`Ya existe "${form.nombre}" con unidad "${unidadFinal}"`, { duration: 4000 })
+    }
+
     setSubiendo(true)
     try {
       let imagen_url = editando?.imagen_url || null
       if (imagenFile) imagen_url = await subirImagen(imagenFile, form.nombre)
+
       const payload = {
-        ...form,
+        nombre: form.nombre.trim(),
+        descripcion: form.descripcion,
         precio: Number(form.precio),
         precio_oferta: form.precio_oferta ? Number(form.precio_oferta) : null,
+        unidad: unidadFinal,
         stock: Number(form.stock),
         stock_minimo: Number(form.stock_minimo),
         categoria_id: form.categoria_id || null,
+        activo: form.activo,
         codigo_barras: form.codigo_barras || null,
         imagen_url,
         updated_at: new Date().toISOString()
       }
+
       if (editando) {
         const { error } = await supabase.from('productos').update(payload).eq('id', editando.id)
         if (error) throw error
@@ -100,7 +137,7 @@ export default function AdminProductos() {
       } else {
         const { error } = await supabase.from('productos').insert(payload)
         if (error) throw error
-        toast.success('Producto creado')
+        toast.success('Producto creado ✅')
       }
       setModalAbierto(false)
       cargar()
@@ -133,7 +170,6 @@ export default function AdminProductos() {
         <button onClick={abrirNuevo} className="btn-primary"><Plus size={16} /> Nuevo producto</button>
       </div>
 
-      {/* Filtros */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
         <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
           <Search size={14} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--texto-suave)' }} />
@@ -159,7 +195,9 @@ export default function AdminProductos() {
               }
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ fontWeight: 600, fontSize: 14 }}>{p.nombre}</p>
-                <p style={{ fontSize: 12, color: 'var(--texto-suave)' }}>{p.categorias?.nombre || 'Sin categoría'} · {p.unidad}</p>
+                <p style={{ fontSize: 12, color: 'var(--texto-suave)' }}>
+                  {p.categorias?.nombre || 'Sin categoría'} · <span style={{ color: 'var(--naranja)', fontWeight: 500 }}>{p.unidad}</span>
+                </p>
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
                 <p style={{ fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 16, color: 'var(--naranja)' }}>S/ {Number(p.precio).toFixed(2)}</p>
@@ -189,26 +227,51 @@ export default function AdminProductos() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div style={{ gridColumn: '1/-1' }}>
                 <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Nombre *</label>
-                <input value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej: Arroz Extra 1kg" />
+                <input value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej: Arroz" />
               </div>
+
               <div style={{ gridColumn: '1/-1' }}>
                 <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Descripción</label>
                 <input value={form.descripcion} onChange={e => setForm({ ...form, descripcion: e.target.value })} placeholder="Descripción opcional" />
               </div>
+
+              {/* Unidad + Cantidad juntas */}
+              <div style={{ gridColumn: '1/-1' }}>
+                <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>
+                  Unidad de medida
+                  <span style={{ fontSize: 11, color: 'var(--texto-suave)', marginLeft: 8 }}>
+                    Vista previa: <strong style={{ color: 'var(--naranja)' }}>{etiquetaUnidad(form.unidad, form.cantidad_unidad)}</strong>
+                  </span>
+                </label>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={form.cantidad_unidad}
+                    onChange={e => setForm({ ...form, cantidad_unidad: e.target.value })}
+                    placeholder="Ej: 3"
+                    style={{ width: 100, flexShrink: 0 }}
+                  />
+                  <select value={form.unidad} onChange={e => setForm({ ...form, unidad: e.target.value })} style={{ flex: 1 }}>
+                    {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
+                  </select>
+                </div>
+                <p style={{ fontSize: 11, color: 'var(--texto-suave)', marginTop: 5 }}>
+                  Deja el número vacío si no aplica (ej: solo "unidad" o "paquete")
+                </p>
+              </div>
+
               <div>
                 <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Precio (S/) *</label>
                 <input type="number" min="0" step="0.01" value={form.precio} onChange={e => setForm({ ...form, precio: e.target.value })} placeholder="0.00" />
               </div>
+
               <div>
                 <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Precio oferta (S/)</label>
                 <input type="number" min="0" step="0.01" value={form.precio_oferta} onChange={e => setForm({ ...form, precio_oferta: e.target.value })} placeholder="Dejar vacío si no hay" />
               </div>
-              <div>
-                <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Unidad de medida</label>
-                <select value={form.unidad} onChange={e => setForm({ ...form, unidad: e.target.value })}>
-                  {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
-                </select>
-              </div>
+
               <div>
                 <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Categoría</label>
                 <select value={form.categoria_id} onChange={e => setForm({ ...form, categoria_id: e.target.value })}>
@@ -216,14 +279,17 @@ export default function AdminProductos() {
                   {categorias.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
                 </select>
               </div>
+
               <div>
                 <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Stock actual</label>
                 <input type="number" min="0" value={form.stock} onChange={e => setForm({ ...form, stock: e.target.value })} />
               </div>
+
               <div>
                 <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Stock mínimo (alerta)</label>
                 <input type="number" min="0" value={form.stock_minimo} onChange={e => setForm({ ...form, stock_minimo: e.target.value })} />
               </div>
+
               <div style={{ gridColumn: '1/-1' }}>
                 <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Código de barras (opcional)</label>
                 <input value={form.codigo_barras} onChange={e => setForm({ ...form, codigo_barras: e.target.value })} placeholder="Para uso futuro con lector" />
