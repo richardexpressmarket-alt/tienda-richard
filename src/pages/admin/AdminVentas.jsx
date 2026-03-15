@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { ShoppingBag, ChevronDown, ChevronUp, Calendar } from 'lucide-react'
+import { ShoppingBag, ChevronDown, ChevronUp, Calendar, Trash2 } from 'lucide-react'
+import toast from 'react-hot-toast'
 
 export default function AdminVentas() {
-  const [ventas, setVentas] = useState([])
-  const [cargando, setCargando] = useState(true)
+  const [ventas, setVentas]       = useState([])
+  const [cargando, setCargando]   = useState(true)
   const [expandida, setExpandida] = useState(null)
-  const [desde, setDesde] = useState(() => { const d = new Date(); d.setDate(1); return d.toISOString().split('T')[0] })
+  const [desde, setDesde] = useState(() => {
+    const d = new Date(); d.setDate(1); return d.toISOString().split('T')[0]
+  })
   const [hasta, setHasta] = useState(() => new Date().toISOString().split('T')[0])
 
   useEffect(() => { cargar() }, [desde, hasta])
@@ -21,6 +24,22 @@ export default function AdminVentas() {
       .order('created_at', { ascending: false })
     setVentas(data || [])
     setCargando(false)
+  }
+
+  async function eliminarVenta(venta) {
+    if (!confirm(
+      `¿Eliminar venta de ${venta.nombre_cliente || 'Cliente'}?\n\n` +
+      `Esto devolverá el stock de los productos y quitará S/ ${Number(venta.total).toFixed(2)} de las ventas.`
+    )) return
+
+    try {
+      const { error } = await supabase.rpc('revertir_venta', { venta_uuid: venta.id })
+      if (error) throw error
+      toast.success('Venta eliminada y stock restaurado ✅')
+      cargar()
+    } catch (e) {
+      toast.error('Error: ' + e.message)
+    }
   }
 
   const totalPeriodo = ventas.reduce((a, v) => a + Number(v.total), 0)
@@ -45,7 +64,9 @@ export default function AdminVentas() {
           </div>
           <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
             <p style={{ fontSize: 12, color: 'var(--texto-suave)' }}>{ventas.length} ventas</p>
-            <p style={{ fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 18, color: 'var(--naranja)' }}>S/ {totalPeriodo.toFixed(2)}</p>
+            <p style={{ fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 18, color: 'var(--naranja)' }}>
+              S/ {totalPeriodo.toFixed(2)}
+            </p>
           </div>
         </div>
       </div>
@@ -70,24 +91,39 @@ export default function AdminVentas() {
                     {new Date(v.created_at).toLocaleString('es-PE')} · {v.perfiles?.nombre || 'Sistema'}
                   </p>
                 </div>
-                <span className={`badge ${v.tipo === 'online' ? 'badge-naranja' : 'badge-verde'}`}>{v.tipo}</span>
-                <p style={{ fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 16, marginLeft: 8 }}>S/ {Number(v.total).toFixed(2)}</p>
+                <span className={`badge ${v.tipo === 'online' ? 'badge-naranja' : 'badge-verde'}`}>
+                  {v.tipo === 'online' ? 'WhatsApp' : 'Física'}
+                </span>
+                <p style={{ fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 16, marginLeft: 8 }}>
+                  S/ {Number(v.total).toFixed(2)}
+                </p>
                 {expandida === v.id ? <ChevronUp size={16} color="var(--texto-suave)" /> : <ChevronDown size={16} color="var(--texto-suave)" />}
               </button>
 
+              {/* Detalle */}
               {expandida === v.id && (
                 <div style={{ borderTop: '1px solid var(--borde)', padding: '14px 16px', background: 'var(--fondo)' }}>
                   {v.venta_items?.map(item => (
                     <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', borderBottom: '1px solid var(--borde)' }}>
+                      {item.productos?.imagen_url && (
+                        <img src={item.productos.imagen_url} alt={item.nombre_producto} style={{ width: 36, height: 36, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }} />
+                      )}
                       <p style={{ flex: 1, fontSize: 13 }}>{item.nombre_producto}</p>
                       <p style={{ fontSize: 13, color: 'var(--texto-suave)' }}>x{item.cantidad}</p>
                       <p style={{ fontSize: 13, fontWeight: 600 }}>S/ {Number(item.subtotal).toFixed(2)}</p>
                     </div>
                   ))}
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10, paddingTop: 8 }}>
-                    <p style={{ fontWeight: 700, fontSize: 15 }}>Total: <span style={{ color: 'var(--naranja)' }}>S/ {Number(v.total).toFixed(2)}</span></p>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, paddingTop: 8 }}>
+                    <button onClick={() => eliminarVenta(v)} className="btn-danger" style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <Trash2 size={13} /> Eliminar venta y restaurar stock
+                    </button>
+                    <p style={{ fontWeight: 700, fontSize: 15 }}>
+                      Total: <span style={{ color: 'var(--naranja)' }}>S/ {Number(v.total).toFixed(2)}</span>
+                    </p>
                   </div>
-                  {v.notas && <p style={{ fontSize: 12, color: 'var(--texto-suave)', marginTop: 6 }}>Nota: {v.notas}</p>}
+                  {v.notas && (
+                    <p style={{ fontSize: 12, color: 'var(--texto-suave)', marginTop: 6 }}>Nota: {v.notas}</p>
+                  )}
                 </div>
               )}
             </div>
