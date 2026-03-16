@@ -26,7 +26,7 @@ export default function VendedorVenta() {
   async function cargarProductos() {
     const { data } = await supabase
       .from('productos')
-      .select('*, categorias(nombre)')
+      .select('*, categorias(nombre), secciones(nombre)')
       .eq('activo', true)
       .order('nombre')
     setProductos(data || [])
