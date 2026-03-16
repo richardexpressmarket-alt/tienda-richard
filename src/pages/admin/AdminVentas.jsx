@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { ShoppingBag, ChevronDown, ChevronUp, Calendar, Trash2 } from 'lucide-react'
+import { ShoppingBag, ChevronDown, ChevronUp, Calendar, Trash2, Download } from 'lucide-react'
+import { exportarCSV } from '../../lib/exportar'
 import toast from 'react-hot-toast'
 
 export default function AdminVentas() {
@@ -31,7 +32,22 @@ export default function AdminVentas() {
       `¿Eliminar venta de ${venta.nombre_cliente || 'Cliente'}?\n\n` +
       `Esto devolverá el stock de los productos y quitará S/ ${Number(venta.total).toFixed(2)} de las ventas.`
     )) return
-
+function handleExportar() {
+  if (ventas.length === 0) return toast.error('No hay ventas para exportar')
+  exportarCSV('ventas', [
+    ['Fecha', 'Cliente', 'Vendedor', 'Tipo', 'Productos', 'Total (S/)', 'Notas'],
+    ...ventas.map(v => [
+      new Date(v.created_at).toLocaleString('es-PE'),
+      v.nombre_cliente || 'Cliente',
+      v.perfiles?.nombre || 'Sistema',
+      v.tipo === 'online' ? 'WhatsApp' : 'Física',
+      v.venta_items?.map(i => `${i.nombre_producto} x${i.cantidad}`).join(' | ') || '',
+      Number(v.total).toFixed(2),
+      v.notas || ''
+    ])
+  ])
+  toast.success('Excel exportado ✅')
+}
     try {
       const { error } = await supabase.rpc('revertir_venta', { venta_uuid: venta.id })
       if (error) throw error
@@ -46,9 +62,14 @@ export default function AdminVentas() {
 
   return (
     <div>
-      <h1 style={{ fontFamily: 'var(--fuente-display)', fontSize: 24, fontWeight: 800, marginBottom: 20 }}>
-        Ventas<span style={{ color: 'var(--naranja)' }}>.</span>
-      </h1>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+  <h1 style={{ fontFamily: 'var(--fuente-display)', fontSize: 24, fontWeight: 800 }}>
+    Ventas<span style={{ color: 'var(--naranja)' }}>.</span>
+  </h1>
+  <button onClick={handleExportar} className="btn-ghost" style={{ fontSize: 13 }}>
+    <Download size={14} /> Excel
+  </button>
+</div>
 
       {/* Filtro fechas */}
       <div className="card" style={{ padding: '16px 20px', marginBottom: 20 }}>
