@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
-import { Plus, Pencil, Trash2, Upload, X, Package } from 'lucide-react'
+import { Plus, Pencil, Trash2, Upload, X, Package, Download } from 'lucide-react'
+import { exportarCSV } from '../../lib/exportar'
 import toast from 'react-hot-toast'
 
 const vacioForm = { nombre: '', descripcion: '', orden: 0, activo: true }
@@ -88,14 +89,33 @@ export default function AdminCategorias() {
     toast.success('Categoría eliminada')
     cargar()
   }
-
+function handleExportar() {
+  if (categorias.length === 0) return toast.error('No hay categorías para exportar')
+  exportarCSV('categorias', [
+    ['Nombre', 'Descripción', 'Orden', 'Activa'],
+    ...categorias.map(c => [
+      c.nombre,
+      c.descripcion || '',
+      c.orden,
+      c.activo ? 'Sí' : 'No'
+    ])
+  ])
+  toast.success('Excel exportado ✅')
+}
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <h1 style={{ fontFamily: 'var(--fuente-display)', fontSize: 24, fontWeight: 800 }}>
           Categorías<span style={{ color: 'var(--naranja)' }}>.</span>
         </h1>
-        <button onClick={abrirNuevo} className="btn-primary">
+        <div style={{ display: 'flex', gap: 8 }}>
+  <button onClick={handleExportar} className="btn-ghost" style={{ fontSize: 13 }}>
+    <Download size={14} /> Excel
+  </button>
+  <button onClick={abrirNuevo} className="btn-primary">
+    <Plus size={16} /> Nueva categoría
+  </button>
+</div>
           <Plus size={16} /> Nueva categoría
         </button>
       </div>
