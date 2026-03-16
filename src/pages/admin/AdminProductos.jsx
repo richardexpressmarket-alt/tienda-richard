@@ -189,7 +189,12 @@ function handleExportar() {
   <button onClick={handleExportar} className="btn-ghost" style={{ fontSize: 13 }}>
     <Download size={14} /> Excel
   </button>
+  <div style={{ display: 'flex', gap: 8 }}>
+  <button onClick={handleExportar} className="btn-ghost" style={{ fontSize: 13 }}>
+    <Download size={14} /> Excel
+  </button>
   <button onClick={abrirNuevo} className="btn-primary"><Plus size={16} /> Nuevo producto</button>
+</div>
 </div>
       </div>
 
