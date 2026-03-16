@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { TrendingUp, Package, Clock, Calendar, AlertTriangle, Star } from 'lucide-react'
+import { TrendingUp, Package, Clock, Calendar, AlertTriangle, Star, Download, FileText } from 'lucide-react'
+import { exportarCSV, exportarPDF } from '../../lib/exportar'
 
 const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 const HORAS = Array.from({ length: 16 }, (_, i) => `${i + 6}:00`)
@@ -29,7 +30,115 @@ export default function AdminAnalisis() {
       setCargando(false)
       return
     }
+function handleExportarExcel() {
+  if (!datos) return toast.error('No hay datos para exportar')
+  exportarCSV('analisis_productos', [
+    ['Ranking', 'Producto', 'Unidad', 'Unidades Vendidas', 'Ingresos (S/)', 'Stock Actual', 'Necesita Restock'],
+    ...datos.masVendidos.map((p, i) => [
+      `#${i + 1}`, p.nombre, p.unidad, p.unidades,
+      p.ingresos.toFixed(2), p.stock,
+      p.stock <= p.stock_minimo ? 'SÍ' : 'No'
+    ])
+  ])
+  toast.success('Excel exportado ✅')
+}
 
+async function handleExportarPDF() {
+  if (!datos) return toast.error('No hay datos para exportar')
+  toast.loading('Generando PDF...')
+
+  const maxBarH = 60
+  const barrasHora = datos.horasData.map(({ label, ventas: v }) => `
+    <div class="bar-col">
+      <span class="bar-val">${v > 0 ? v : ''}</span>
+      <div class="bar" style="height:${Math.max((v / datos.maxHora) * maxBarH, v > 0 ? 4 : 1)}px;opacity:${v > 0 ? 1 : 0.3}"></div>
+      <span class="bar-lbl">${label}</span>
+    </div>
+  `).join('')
+
+  const barrasDia = datos.diasData.map(({ label, ventas: v }) => `
+    <div class="bar-col">
+      <span class="bar-val" style="color:#7C3AED">${v > 0 ? v : ''}</span>
+      <div class="bar" style="height:${Math.max((v / datos.maxDia) * maxBarH, v > 0 ? 4 : 1)}px;background:#7C3AED;opacity:${v > 0 ? 1 : 0.3}"></div>
+      <span class="bar-lbl">${label}</span>
+    </div>
+  `).join('')
+
+  const html = `
+    <div class="header">
+      <div>
+        <h1>Richard Express Market</h1>
+        <p>Reporte de Análisis — Últimos ${periodo} días</p>
+        <p>Generado: ${new Date().toLocaleString('es-PE')}</p>
+      </div>
+      <div style="text-align:right">
+        <p style="font-size:10px;color:#999">Richard Express Market</p>
+      </div>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-val">S/ ${datos.totalVendido.toFixed(2)}</div>
+        <div class="stat-lbl">Total vendido</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val">${datos.totalVentas}</div>
+        <div class="stat-lbl">Nº de ventas</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val">S/ ${datos.ticketPromedio.toFixed(2)}</div>
+        <div class="stat-lbl">Ticket promedio</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val" style="font-size:13px">${datos.productoEstrella?.nombre || '-'}</div>
+        <div class="stat-lbl">Producto estrella</div>
+      </div>
+    </div>
+
+    <h2>Ventas por hora del día</h2>
+    <div class="bar-wrap">${barrasHora}</div>
+
+    <h2>Ventas por día de la semana</h2>
+    <div class="bar-wrap">${barrasDia}</div>
+
+    <h2>Productos más vendidos</h2>
+    <table>
+      <thead><tr>
+        <th>#</th><th>Producto</th><th>Unidad</th>
+        <th>Unidades vendidas</th><th>Ingresos (S/)</th><th>Stock</th>
+      </tr></thead>
+      <tbody>
+        ${datos.masVendidos.map((p, i) => `
+          <tr>
+            <td><strong>${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '#' + (i + 1)}</strong></td>
+            <td>${p.nombre}</td>
+            <td>${p.unidad}</td>
+            <td class="naranja">${p.unidades}</td>
+            <td class="verde">S/ ${p.ingresos.toFixed(2)}</td>
+            <td class="${p.stock <= p.stock_minimo ? 'rojo' : ''}">${p.stock}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+
+    <h2>Sugerencias de reabastecimiento</h2>
+    ${datos.restock.map(p => `
+      <div class="restock">
+        <div>
+          <strong>${p.necesita ? '⚠️ ' : ''}${p.nombre}</strong>
+          <p>Vende ~${p.promedioDiario.toFixed(1)} ${p.unidad}/día · Stock actual: ${p.stock}</p>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:18px;font-weight:800;color:#FF6B00">${p.sugerido} ${p.unidad}</div>
+          <div style="font-size:10px;color:#666">Comprar para 14 días</div>
+        </div>
+      </div>
+    `).join('')}
+  `
+
+  toast.dismiss()
+  await exportarPDF(`analisis_${periodo}dias`, html)
+}
     // — Productos más vendidos
     const mapaProductos = {}
     ventas.forEach(v => {
