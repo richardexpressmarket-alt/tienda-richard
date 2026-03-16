@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
-import { Plus, Pencil, Trash2, Upload, X, Package, Search } from 'lucide-react'
+import { Plus, Pencil, Trash2, Upload, X, Package, Search, Download } from 'lucide-react'
+import { exportarCSV } from '../../lib/exportar'
 import toast from 'react-hot-toast'
 
 const vacioForm = {
