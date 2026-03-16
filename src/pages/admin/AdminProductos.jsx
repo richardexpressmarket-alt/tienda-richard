@@ -155,7 +155,24 @@ export default function AdminProductos() {
     toast.success('Producto eliminado')
     cargar()
   }
-
+function handleExportar() {
+  if (productos.length === 0) return toast.error('No hay productos para exportar')
+  exportarCSV('productos', [
+    ['Nombre', 'Categoría', 'Precio (S/)', 'Precio Oferta', 'Unidad', 'Stock', 'Stock Mínimo', 'Código Barras', 'Activo'],
+    ...productos.map(p => [
+      p.nombre,
+      p.categorias?.nombre || 'Sin categoría',
+      Number(p.precio).toFixed(2),
+      p.precio_oferta ? Number(p.precio_oferta).toFixed(2) : '',
+      p.unidad,
+      p.stock,
+      p.stock_minimo,
+      p.codigo_barras || '',
+      p.activo ? 'Sí' : 'No'
+    ])
+  ])
+  toast.success('Excel exportado ✅')
+}
   const filtrados = productos.filter(p => {
     const matchBusq = p.nombre.toLowerCase().includes(busqueda.toLowerCase())
     const matchCat = filtroCat ? p.categoria_id === filtroCat : true
