@@ -30,24 +30,8 @@ export default function AdminVentas() {
   async function eliminarVenta(venta) {
     if (!confirm(
       `¿Eliminar venta de ${venta.nombre_cliente || 'Cliente'}?\n\n` +
-      `Esto devolverá el stock de los productos y quitará S/ ${Number(venta.total).toFixed(2)} de las ventas.`
+      `Esto devolverá el stock y quitará S/ ${Number(venta.total).toFixed(2)} de las ventas.`
     )) return
-function handleExportar() {
-  if (ventas.length === 0) return toast.error('No hay ventas para exportar')
-  exportarCSV('ventas', [
-    ['Fecha', 'Cliente', 'Vendedor', 'Tipo', 'Productos', 'Total (S/)', 'Notas'],
-    ...ventas.map(v => [
-      new Date(v.created_at).toLocaleString('es-PE'),
-      v.nombre_cliente || 'Cliente',
-      v.perfiles?.nombre || 'Sistema',
-      v.tipo === 'online' ? 'WhatsApp' : 'Física',
-      v.venta_items?.map(i => `${i.nombre_producto} x${i.cantidad}`).join(' | ') || '',
-      Number(v.total).toFixed(2),
-      v.notas || ''
-    ])
-  ])
-  toast.success('Excel exportado ✅')
-}
     try {
       const { error } = await supabase.rpc('revertir_venta', { venta_uuid: venta.id })
       if (error) throw error
@@ -58,20 +42,36 @@ function handleExportar() {
     }
   }
 
+  function handleExportar() {
+    if (ventas.length === 0) return toast.error('No hay ventas para exportar')
+    exportarCSV('ventas', [
+      ['Fecha', 'Cliente', 'Vendedor', 'Tipo', 'Productos', 'Total (S/)', 'Notas'],
+      ...ventas.map(v => [
+        new Date(v.created_at).toLocaleString('es-PE'),
+        v.nombre_cliente || 'Cliente',
+        v.perfiles?.nombre || 'Sistema',
+        v.tipo === 'online' ? 'WhatsApp' : 'Física',
+        v.venta_items?.map(i => `${i.nombre_producto} x${i.cantidad}`).join(' | ') || '',
+        Number(v.total).toFixed(2),
+        v.notas || ''
+      ])
+    ])
+    toast.success('Excel exportado ✅')
+  }
+
   const totalPeriodo = ventas.reduce((a, v) => a + Number(v.total), 0)
 
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-  <h1 style={{ fontFamily: 'var(--fuente-display)', fontSize: 24, fontWeight: 800 }}>
-    Ventas<span style={{ color: 'var(--naranja)' }}>.</span>
-  </h1>
-  <button onClick={handleExportar} className="btn-ghost" style={{ fontSize: 13 }}>
-    <Download size={14} /> Excel
-  </button>
-</div>
+        <h1 style={{ fontFamily: 'var(--fuente-display)', fontSize: 24, fontWeight: 800 }}>
+          Ventas<span style={{ color: 'var(--naranja)' }}>.</span>
+        </h1>
+        <button onClick={handleExportar} className="btn-ghost" style={{ fontSize: 13 }}>
+          <Download size={14} /> Excel
+        </button>
+      </div>
 
-      {/* Filtro fechas */}
       <div className="card" style={{ padding: '16px 20px', marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <Calendar size={16} color="var(--texto-suave)" />
@@ -121,7 +121,6 @@ function handleExportar() {
                 {expandida === v.id ? <ChevronUp size={16} color="var(--texto-suave)" /> : <ChevronDown size={16} color="var(--texto-suave)" />}
               </button>
 
-              {/* Detalle */}
               {expandida === v.id && (
                 <div style={{ borderTop: '1px solid var(--borde)', padding: '14px 16px', background: 'var(--fondo)' }}>
                   {v.venta_items?.map(item => (
@@ -142,9 +141,7 @@ function handleExportar() {
                       Total: <span style={{ color: 'var(--naranja)' }}>S/ {Number(v.total).toFixed(2)}</span>
                     </p>
                   </div>
-                  {v.notas && (
-                    <p style={{ fontSize: 12, color: 'var(--texto-suave)', marginTop: 6 }}>Nota: {v.notas}</p>
-                  )}
+                  {v.notas && <p style={{ fontSize: 12, color: 'var(--texto-suave)', marginTop: 6 }}>Nota: {v.notas}</p>}
                 </div>
               )}
             </div>
