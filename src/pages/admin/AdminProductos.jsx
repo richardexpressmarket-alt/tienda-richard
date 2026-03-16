@@ -185,7 +185,12 @@ function handleExportar() {
         <h1 style={{ fontFamily: 'var(--fuente-display)', fontSize: 24, fontWeight: 800 }}>
           Productos<span style={{ color: 'var(--naranja)' }}>.</span>
         </h1>
-        <button onClick={abrirNuevo} className="btn-primary"><Plus size={16} /> Nuevo producto</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+  <button onClick={handleExportar} className="btn-ghost" style={{ fontSize: 13 }}>
+    <Download size={14} /> Excel
+  </button>
+  <button onClick={abrirNuevo} className="btn-primary"><Plus size={16} /> Nuevo producto</button>
+</div>
       </div>
 
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
