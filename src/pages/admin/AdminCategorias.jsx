@@ -8,11 +8,11 @@ const vacioForm = { nombre: '', descripcion: '', orden: 0, activo: true }
 
 export default function AdminCategorias() {
   const [categorias, setCategorias] = useState([])
-  const [form, setForm] = useState(vacioForm)
-  const [editando, setEditando] = useState(null)
+  const [form, setForm]             = useState(vacioForm)
+  const [editando, setEditando]     = useState(null)
   const [modalAbierto, setModalAbierto] = useState(false)
-  const [subiendo, setSubiendo] = useState(false)
-  const [cargando, setCargando] = useState(true)
+  const [subiendo, setSubiendo]     = useState(false)
+  const [cargando, setCargando]     = useState(true)
   const [imagenPreview, setImagenPreview] = useState(null)
   const [imagenFile, setImagenFile] = useState(null)
   const inputRef = useRef()
@@ -26,10 +26,8 @@ export default function AdminCategorias() {
   }
 
   function abrirNuevo() {
-    setForm(vacioForm)
-    setEditando(null)
-    setImagenPreview(null)
-    setImagenFile(null)
+    setForm(vacioForm); setEditando(null)
+    setImagenPreview(null); setImagenFile(null)
     setModalAbierto(true)
   }
 
@@ -50,7 +48,7 @@ export default function AdminCategorias() {
   }
 
   async function subirImagen(file, nombre) {
-    const ext = file.name.split('.').pop()
+    const ext  = file.name.split('.').pop()
     const path = `categorias/${Date.now()}_${nombre.replace(/\s/g, '_')}.${ext}`
     const { error } = await supabase.storage.from('imagenes').upload(path, file, { upsert: true })
     if (error) throw error
@@ -89,19 +87,18 @@ export default function AdminCategorias() {
     toast.success('Categoría eliminada')
     cargar()
   }
-function handleExportar() {
-  if (categorias.length === 0) return toast.error('No hay categorías para exportar')
-  exportarCSV('categorias', [
-    ['Nombre', 'Descripción', 'Orden', 'Activa'],
-    ...categorias.map(c => [
-      c.nombre,
-      c.descripcion || '',
-      c.orden,
-      c.activo ? 'Sí' : 'No'
+
+  function handleExportar() {
+    if (categorias.length === 0) return toast.error('No hay categorías para exportar')
+    exportarCSV('categorias', [
+      ['Nombre', 'Descripción', 'Orden', 'Activa'],
+      ...categorias.map(c => [
+        c.nombre, c.descripcion || '', c.orden, c.activo ? 'Sí' : 'No'
+      ])
     ])
-  ])
-  toast.success('Excel exportado ✅')
-}
+    toast.success('Excel exportado ✅')
+  }
+
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
@@ -109,15 +106,13 @@ function handleExportar() {
           Categorías<span style={{ color: 'var(--naranja)' }}>.</span>
         </h1>
         <div style={{ display: 'flex', gap: 8 }}>
-  <button onClick={handleExportar} className="btn-ghost" style={{ fontSize: 13 }}>
-    <Download size={14} /> Excel
-  </button>
-  <button onClick={abrirNuevo} className="btn-primary">
-    <Plus size={16} /> Nueva categoría
-  </button>
-</div>
-          <Plus size={16} /> Nueva categoría
-        </button>
+          <button onClick={handleExportar} className="btn-ghost" style={{ fontSize: 13 }}>
+            <Download size={14} /> Excel
+          </button>
+          <button onClick={abrirNuevo} className="btn-primary">
+            <Plus size={16} /> Nueva categoría
+          </button>
+        </div>
       </div>
 
       {cargando ? <div className="spinner" /> : (
@@ -152,7 +147,6 @@ function handleExportar() {
         </div>
       )}
 
-      {/* Modal */}
       {modalAbierto && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
           <div className="card" style={{ width: '100%', maxWidth: 480, padding: '24px', maxHeight: '90vh', overflowY: 'auto' }}>
@@ -175,11 +169,10 @@ function handleExportar() {
                 <input value={form.descripcion} onChange={e => setForm({ ...form, descripcion: e.target.value })} placeholder="Ej: Arroz, azúcar, aceite..." />
               </div>
               <div>
-                <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Orden (para ordenar en la tienda)</label>
+                <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Orden</label>
                 <input type="number" value={form.orden} onChange={e => setForm({ ...form, orden: Number(e.target.value) })} min={0} />
               </div>
 
-              {/* Imagen */}
               <div>
                 <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 8, display: 'block' }}>Imagen de la categoría</label>
                 <input ref={inputRef} type="file" accept="image/*" onChange={handleImagen} style={{ display: 'none' }} />
@@ -202,7 +195,7 @@ function handleExportar() {
                     onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--borde)'}>
                     <Upload size={24} />
                     <span style={{ fontSize: 13 }}>Subir imagen</span>
-                    <span style={{ fontSize: 11 }}>JPG, PNG — máx. 3MB</span>
+                    <span style={{ fontSize: 11 }}>JPG, PNG — máx. 10MB</span>
                   </button>
                 )}
               </div>
