@@ -15,6 +15,7 @@ import AdminVentas from './pages/admin/AdminVentas'
 import AdminUsuarios from './pages/admin/AdminUsuarios'
 import AdminPedidos from './pages/admin/AdminPedidos'
 import AdminAnalisis from './pages/admin/AdminAnalisis'
+import AdminAlmacen from './pages/admin/AdminAlmacen'
 import VendedorLayout from './pages/vendedor/VendedorLayout'
 import VendedorVenta from './pages/vendedor/VendedorVenta'
 import { Navigate } from 'react-router-dom'
@@ -70,6 +71,7 @@ export default function App() {
         <Route path="ventas" element={<AdminVentas />} />
         <Route path="pedidos" element={<AdminPedidos />} />
         <Route path="analisis" element={<AdminAnalisis />} />
+        <Route path="almacen" element={<AdminAlmacen />} />
         <Route path="usuarios" element={<AdminUsuarios />} />
       </Route>
 
