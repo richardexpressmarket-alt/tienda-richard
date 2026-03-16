@@ -205,6 +205,9 @@ export default function VendedorVenta() {
               <div style={{ padding: '8px 10px' }}>
                 <p style={{ fontSize: 12, fontWeight: 600, marginBottom: 2, lineHeight: 1.3 }}>{p.nombre}</p>
                 <p style={{ fontSize: 13, color: 'var(--naranja)', fontWeight: 700 }}>S/ {Number(p.precio).toFixed(2)}</p>
+                {p.secciones?.nombre && (
+                  <p style={{ fontSize: 10, color: '#7C3AED', fontWeight: 500 }}>📍 {p.secciones.nombre}</p>
+                )}
                 <p style={{ fontSize: 11, color: p.stock <= p.stock_minimo ? '#E65100' : 'var(--texto-suave)' }}>
                   Stock: {p.stock}
                 </p>
