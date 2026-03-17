@@ -73,6 +73,7 @@ export default function App() {
         <Route path="pedidos" element={<AdminPedidos />} />
         <Route path="analisis" element={<AdminAnalisis />} />
         <Route path="almacen" element={<AdminAlmacen />} />
+        <Route path="precios" element={<AdminPrecios />} />
         <Route path="usuarios" element={<AdminUsuarios />} />
       </Route>
 
