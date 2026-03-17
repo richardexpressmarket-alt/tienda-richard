@@ -48,8 +48,13 @@ export default function AdminCategorias() {
   }
 
   async function subirImagen(file, nombre) {
-    const ext  = file.name.split('.').pop()
-    const path = `categorias/${Date.now()}_${nombre.replace(/\s/g, '_')}.${ext}`
+    const ext = file.name.split('.').pop()
+    const nombreLimpio = nombre
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9_-]/g, '_')
+      .slice(0, 40)
+    const path = `categorias/${Date.now()}_${nombreLimpio}.${ext}`
     const { error } = await supabase.storage.from('imagenes').upload(path, file, { upsert: true })
     if (error) throw error
     const { data } = supabase.storage.from('imagenes').getPublicUrl(path)
