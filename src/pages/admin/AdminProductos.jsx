@@ -6,8 +6,8 @@ import toast from 'react-hot-toast'
 
 const vacioForm = {
   nombre: '', descripcion: '', precio: '', precio_oferta: '',
-  unidad: 'unidad', cantidad_unidad: '', stock: 0, stock_minimo: 5,
-  categoria_id: '', sucursal_id: '', seccion_id: '', activo: true, codigo_barras: ''
+  unidad: 'unidad', cantidad_unidad: '', stock: 0, stock_minimo: 1,
+  categoria_id: '', activo: true, codigo_barras: ''
 }
 
 const UNIDADES = ['unidad', 'kg', 'g', 'lt', 'ml', 'docena', 'paquete', 'caja', 'bolsa']
