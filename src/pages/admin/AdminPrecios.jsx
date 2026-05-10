@@ -61,7 +61,14 @@ export default function AdminPrecios() {
   function handleImprimir() {
     if (paraImprimir.length === 0) return toast.error('Selecciona al menos un producto')
 
-    const etiquetas = paraImprimir.map(p => `
+    function handleImprimir() {
+    const conPrecio = paraImprimir.filter(p => Number(p.precio_oferta || p.precio) > 0)
+    if (conPrecio.length === 0) return toast.error('No hay productos con precio para imprimir')
+    if (conPrecio.length < paraImprimir.length) {
+      toast(`Se omitieron ${paraImprimir.length - conPrecio.length} productos sin precio`, { icon: '⚠️' })
+    }
+
+    const etiquetas = conPrecio.map(p => `
       <div class="etiqueta">
         <div class="nombre">${p.nombre}</div>
         <div class="unidad">${p.unidad}</div>
@@ -78,18 +85,18 @@ export default function AdminPrecios() {
           <title>Etiquetas de Precios — Richard Express Market</title>
           <style>
             * { box-sizing: border-box; margin: 0; padding: 0; }
-            body { font-family: Arial, sans-serif; background: white; padding: 8mm; }
+            body { font-family: Arial, sans-serif; background: white; padding: 5mm; }
             .grid {
               display: grid;
-              grid-template-columns: repeat(3, 7cm);
-              gap: 3mm;
+              grid-template-columns: repeat(4, 5cm);
+              gap: 2mm;
             }
             .etiqueta {
-              width: 7cm;
-              height: 6cm;
-              border: 1.5px solid #333;
-              border-radius: 6px;
-              padding: 10px 12px;
+              width: 5cm;
+              height: 4cm;
+              border: 1px solid #333;
+              border-radius: 4px;
+              padding: 6px 8px;
               display: flex;
               flex-direction: column;
               align-items: center;
@@ -99,33 +106,33 @@ export default function AdminPrecios() {
               break-inside: avoid;
             }
             .nombre {
-              font-size: 11pt;
+              font-size: 8pt;
               font-weight: bold;
               color: #1A1A1A;
-              line-height: 1.3;
-              margin-bottom: 5px;
+              line-height: 1.2;
+              margin-bottom: 3px;
               word-break: break-word;
             }
             .unidad {
-              font-size: 9pt;
+              font-size: 7pt;
               color: #555;
-              margin-bottom: 8px;
+              margin-bottom: 5px;
             }
             .precio {
-              font-size: 22pt;
+              font-size: 16pt;
               font-weight: 900;
               color: #FF6B00;
               letter-spacing: -0.5px;
             }
             .tachado {
-              font-size: 8pt;
+              font-size: 7pt;
               color: #999;
               text-decoration: line-through;
-              margin-top: 3px;
+              margin-top: 2px;
             }
             @media print {
-              body { padding: 5mm; }
-              @page { size: A4; margin: 5mm; }
+              body { padding: 3mm; }
+              @page { size: A4; margin: 3mm; }
             }
           </style>
         </head>
@@ -138,9 +145,8 @@ export default function AdminPrecios() {
       </html>
     `)
     ventana.document.close()
-    toast.success(`${paraImprimir.length} etiquetas listas ✅`)
+    toast.success(`${conPrecio.length} etiquetas listas ✅`)
   }
-
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
