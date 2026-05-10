@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { Plus, Pencil, Trash2, Upload, X, Package, Search, Download } from 'lucide-react'
 import { exportarCSV } from '../../lib/exportar'
