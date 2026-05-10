@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Package, Tag, ShoppingBag, Users, LogOut, Store, Menu, X, MessageCircle, TrendingUp, Warehouse, Tag as TagIcon, Receipt } from 'lucide-react'
+import { LayoutDashboard, Package, Tag, ShoppingBag, Users, LogOut, Store, Menu, X, MessageCircle, TrendingUp, Warehouse, Tag as TagIcon, Receipt, BarChart2 } from 'lucide-react'
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../store'
