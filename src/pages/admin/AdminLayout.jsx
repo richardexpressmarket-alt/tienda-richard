@@ -6,16 +6,17 @@ import { useAuth } from '../../store'
 import toast from 'react-hot-toast'
 
 const menu = [
-  { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, exact: true },
-  { to: '/admin/productos', label: 'Productos', icon: Package },
-  { to: '/admin/categorias', label: 'Categorías', icon: Tag },
-  { to: '/admin/almacen', label: 'Almacén', icon: Warehouse },
-  { to: '/admin/pedidos', label: 'Pedidos WhatsApp', icon: MessageCircle },
-  { to: '/admin/ventas', label: 'Ventas', icon: ShoppingBag },
-  { to: '/admin/compras', label: 'Compras', icon: Receipt },
-  { to: '/admin/analisis', label: 'Análisis', icon: TrendingUp },
-  { to: '/admin/precios', label: 'Etiquetas', icon: TagIcon },
-  { to: '/admin/usuarios', label: 'Usuarios', icon: Users },
+  { to: '/admin',            label: 'Dashboard',        icon: LayoutDashboard, exact: true },
+  { to: '/admin/productos',  label: 'Productos',         icon: Package },
+  { to: '/admin/categorias', label: 'Categorías',        icon: Tag },
+  { to: '/admin/almacen',    label: 'Almacén',           icon: Warehouse },
+  { to: '/admin/pedidos',    label: 'Pedidos WhatsApp',  icon: MessageCircle },
+  { to: '/admin/ventas',     label: 'Ventas',            icon: ShoppingBag },
+  { to: '/admin/compras',    label: 'Compras',           icon: Receipt },
+  { to: '/admin/inventario', label: 'Inventario',        icon: BarChart2 },
+  { to: '/admin/analisis',   label: 'Análisis',          icon: TrendingUp },
+  { to: '/admin/precios',    label: 'Etiquetas',         icon: TagIcon },
+  { to: '/admin/usuarios',   label: 'Usuarios',          icon: Users },
 ]
 export default function AdminLayout() {
   const { pathname } = useLocation()
