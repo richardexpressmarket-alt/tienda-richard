@@ -29,7 +29,28 @@ export default function AdminProductos() {
   const [filtroCat, setFiltroCat]   = useState('')
   const inputRef = useRef()
 
+  const [searchParams] = useSearchParams()
+
   useEffect(() => { cargar() }, [])
+
+  useEffect(() => {
+    const editarId = searchParams.get('editar')
+    const esNuevo  = searchParams.get('nuevo')
+    if (!editarId && !esNuevo) return
+    if (esNuevo) { abrirNuevo(); return }
+    // Espera a que carguen los productos y abre el modal
+    const intentar = setInterval(() => {
+      setProductos(prev => {
+        const prod = prev.find(p => p.id === editarId)
+        if (prod) {
+          abrirEditar(prod)
+          clearInterval(intentar)
+        }
+        return prev
+      })
+    }, 300)
+    setTimeout(() => clearInterval(intentar), 5000)
+  }, [searchParams])
 
   async function cargar() {
     const [{ data: prods }, { data: cats }, { data: sucs }, { data: secs }] = await Promise.all([
