@@ -59,15 +59,11 @@ export default function AdminPrecios() {
   }
 
   function handleImprimir() {
-    if (paraImprimir.length === 0) return toast.error('Selecciona al menos un producto')
-
-    function handleImprimir() {
     const conPrecio = paraImprimir.filter(p => Number(p.precio_oferta || p.precio) > 0)
     if (conPrecio.length === 0) return toast.error('No hay productos con precio para imprimir')
     if (conPrecio.length < paraImprimir.length) {
       toast(`Se omitieron ${paraImprimir.length - conPrecio.length} productos sin precio`, { icon: '⚠️' })
     }
-
     const etiquetas = conPrecio.map(p => `
       <div class="etiqueta">
         <div class="nombre">${p.nombre}</div>
@@ -76,77 +72,34 @@ export default function AdminPrecios() {
         ${p.precio_oferta ? `<div class="tachado">Antes: S/ ${Number(p.precio).toFixed(2)}</div>` : ''}
       </div>
     `).join('')
-
     const ventana = window.open('', '_blank')
     ventana.document.write(`
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Etiquetas de Precios — Richard Express Market</title>
+          <title>Etiquetas de Precios</title>
           <style>
             * { box-sizing: border-box; margin: 0; padding: 0; }
             body { font-family: Arial, sans-serif; background: white; padding: 5mm; }
-            .grid {
-              display: grid;
-              grid-template-columns: repeat(4, 5cm);
-              gap: 2mm;
-            }
-            .etiqueta {
-              width: 5cm;
-              height: 4cm;
-              border: 1px solid #333;
-              border-radius: 4px;
-              padding: 6px 8px;
-              display: flex;
-              flex-direction: column;
-              align-items: center;
-              justify-content: center;
-              text-align: center;
-              page-break-inside: avoid;
-              break-inside: avoid;
-            }
-            .nombre {
-              font-size: 8pt;
-              font-weight: bold;
-              color: #1A1A1A;
-              line-height: 1.2;
-              margin-bottom: 3px;
-              word-break: break-word;
-            }
-            .unidad {
-              font-size: 7pt;
-              color: #555;
-              margin-bottom: 5px;
-            }
-            .precio {
-              font-size: 16pt;
-              font-weight: 900;
-              color: #FF6B00;
-              letter-spacing: -0.5px;
-            }
-            .tachado {
-              font-size: 7pt;
-              color: #999;
-              text-decoration: line-through;
-              margin-top: 2px;
-            }
-            @media print {
-              body { padding: 3mm; }
-              @page { size: A4; margin: 3mm; }
-            }
+            .grid { display: grid; grid-template-columns: repeat(4, 5cm); gap: 2mm; }
+            .etiqueta { width: 5cm; height: 4cm; border: 1px solid #333; border-radius: 4px; padding: 6px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; page-break-inside: avoid; break-inside: avoid; }
+            .nombre { font-size: 8pt; font-weight: bold; color: #1A1A1A; line-height: 1.2; margin-bottom: 3px; word-break: break-word; }
+            .unidad { font-size: 7pt; color: #555; margin-bottom: 5px; }
+            .precio { font-size: 16pt; font-weight: 900; color: #FF6B00; }
+            .tachado { font-size: 7pt; color: #999; text-decoration: line-through; margin-top: 2px; }
+            @media print { body { padding: 3mm; } @page { size: A4; margin: 3mm; } }
           </style>
         </head>
         <body>
           <div class="grid">${etiquetas}</div>
-          <script>
-            window.onload = function() { setTimeout(function() { window.print(); }, 500); }
-          </script>
+          <script>window.onload = function() { setTimeout(function() { window.print(); }, 500); }</script>
         </body>
       </html>
     `)
     ventana.document.close()
     toast.success(`${conPrecio.length} etiquetas listas ✅`)
   }
+
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
@@ -159,11 +112,10 @@ export default function AdminPrecios() {
           </p>
         </div>
         <button onClick={handleImprimir} className="btn-primary" style={{ gap: 8 }}>
-          <Printer size={16} /> Imprimir {paraImprimir.length} etiquetas
+          <Printer size={16} /> Imprimir {paraImprimir.filter(p => Number(p.precio_oferta || p.precio) > 0).length} etiquetas
         </button>
       </div>
 
-      {/* Filtros */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
         <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
           <Search size={14} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--texto-suave)' }} />
@@ -183,32 +135,29 @@ export default function AdminPrecios() {
         {paraImprimir.length} de {filtrados.length} productos seleccionados
       </p>
 
-      {/* Preview etiquetas */}
       {cargando ? <div className="spinner" /> : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
           {filtrados.map(p => {
-            const marcado = seleccionados.has(p.id)
+            const marcado   = seleccionados.has(p.id)
+            const sinPrecio = Number(p.precio_oferta || p.precio) === 0
             return (
               <div key={p.id} onClick={() => toggleProducto(p.id)}
-                style={{ border: `2px solid ${marcado ? 'var(--naranja)' : 'var(--borde)'}`, borderRadius: 12, padding: '14px 16px', cursor: 'pointer', background: marcado ? 'var(--naranja-light)' : 'var(--blanco)', transition: 'all 0.15s', position: 'relative', userSelect: 'none' }}>
-                <div style={{ position: 'absolute', top: 10, right: 10, width: 20, height: 20, borderRadius: '50%', background: marcado ? 'var(--naranja)' : 'var(--borde)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}>
-                  {marcado && <span style={{ color: 'white', fontSize: 12, fontWeight: 700 }}>✓</span>}
+                style={{ border: `2px solid ${marcado ? 'var(--naranja)' : 'var(--borde)'}`, borderRadius: 12, padding: '12px 14px', cursor: 'pointer', background: marcado ? 'var(--naranja-light)' : 'var(--blanco)', transition: 'all 0.15s', position: 'relative', userSelect: 'none', opacity: sinPrecio ? 0.5 : 1 }}>
+                <div style={{ position: 'absolute', top: 8, right: 8, width: 18, height: 18, borderRadius: '50%', background: marcado ? 'var(--naranja)' : 'var(--borde)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {marcado && <span style={{ color: 'white', fontSize: 11, fontWeight: 700 }}>✓</span>}
                 </div>
-                <div style={{ textAlign: 'center', padding: '8px 4px' }}>
-                  <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--texto)', lineHeight: 1.3, marginBottom: 5, paddingRight: 20 }}>
-                    {p.nombre}
-                  </p>
-                  <p style={{ fontSize: 11, color: 'var(--texto-suave)', marginBottom: 8 }}>{p.unidad}</p>
-                  <p style={{ fontFamily: 'var(--fuente-display)', fontSize: 22, fontWeight: 900, color: 'var(--naranja)' }}>
-                    S/ {Number(p.precio_oferta || p.precio).toFixed(2)}
-                  </p>
-                  {p.precio_oferta && (
-                    <p style={{ fontSize: 11, color: 'var(--texto-suave)', textDecoration: 'line-through', marginTop: 2 }}>
-                      Antes: S/ {Number(p.precio).toFixed(2)}
+                <div style={{ textAlign: 'center', paddingRight: 16 }}>
+                  <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--texto)', lineHeight: 1.3, marginBottom: 4 }}>{p.nombre}</p>
+                  <p style={{ fontSize: 10, color: 'var(--texto-suave)', marginBottom: 6 }}>{p.unidad}</p>
+                  {sinPrecio ? (
+                    <p style={{ fontSize: 11, color: '#C62828' }}>Sin precio — no se imprimirá</p>
+                  ) : (
+                    <p style={{ fontFamily: 'var(--fuente-display)', fontSize: 18, fontWeight: 900, color: 'var(--naranja)' }}>
+                      S/ {Number(p.precio_oferta || p.precio).toFixed(2)}
                     </p>
                   )}
                 </div>
-                <p style={{ fontSize: 10, color: 'var(--texto-suave)', textAlign: 'center', marginTop: 6 }}>
+                <p style={{ fontSize: 10, color: 'var(--texto-suave)', textAlign: 'center', marginTop: 5 }}>
                   {p.categorias?.nombre || 'Sin categoría'}
                 </p>
               </div>
@@ -220,10 +169,7 @@ export default function AdminPrecios() {
       <div style={{ marginTop: 20, padding: '14px 16px', background: 'var(--naranja-light)', borderRadius: 12, border: '1px solid var(--naranja-mid)' }}>
         <p style={{ fontSize: 13, color: 'var(--naranja-dark)', fontWeight: 500, marginBottom: 4 }}>💡 Cómo imprimir</p>
         <p style={{ fontSize: 12, color: 'var(--naranja-dark)', lineHeight: 1.6 }}>
-          1. Selecciona los productos que quieres imprimir<br />
-          2. Clic en <strong>"Imprimir etiquetas"</strong><br />
-          3. En la ventana de impresión elige <strong>Tamaño: A4</strong> y <strong>Márgenes: Mínimos</strong><br />
-          4. Imprime, recorta y coloca en las repisas ✂️
+          1. Selecciona los productos · 2. Clic en <strong>"Imprimir etiquetas"</strong> · 3. Elige <strong>A4</strong> y <strong>Márgenes mínimos</strong> · 4. Imprime y recorta ✂️
         </p>
       </div>
     </div>
