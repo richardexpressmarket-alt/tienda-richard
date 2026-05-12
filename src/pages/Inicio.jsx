@@ -146,10 +146,64 @@ export default function Inicio() {
         </div>
       </div>
 
-      {/* Footer */}
-      <footer style={{ background: 'var(--blanco)', borderTop: '1px solid var(--borde)', padding: '20px 16px', textAlign: 'center', marginTop: 40 }}>
-        <p style={{ fontSize: 12, color: 'var(--texto-suave)' }}>© 2025 Richard Express Market · Todos los derechos reservados</p>
-      </footer>
+      {/* Footer completo */}
+<footer style={{ background: 'var(--texto)', color: 'white', marginTop: 48 }}>
+  <div className="page-wrap" style={{ padding: '40px 16px 20px' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 32, marginBottom: 32 }}>
+
+      {/* Nosotros */}
+      <div>
+        <h3 style={{ fontFamily: 'var(--fuente-display)', fontSize: 18, fontWeight: 700, marginBottom: 12 }}>
+          Richard Express<span style={{ color: 'var(--naranja)' }}>.</span>
+        </h3>
+        <p style={{ fontSize: 13, color: '#aaa', lineHeight: 1.7 }}>
+          Somos una tienda de barrio comprometida con ofrecerte los mejores productos de abarrotes, lácteos, bebidas, útiles y más, a precios justos y con atención personalizada. Tu satisfacción es nuestra prioridad.
+        </p>
+      </div>
+
+      {/* Qué vendemos */}
+      <div>
+        <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: 'var(--naranja)' }}>Qué vendemos</h4>
+        <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {['Abarrotes y alimentos', 'Lácteos y derivados', 'Bebidas y refrescos', 'Útiles escolares', 'Limpieza y hogar', 'Snacks y golosinas'].map(item => (
+            <li key={item} style={{ fontSize: 13, color: '#aaa', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ color: 'var(--naranja)', fontSize: 10 }}>●</span> {item}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {/* Ubicación */}
+      <div>
+        <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: 'var(--naranja)' }}>📍 Encuéntranos</h4>
+        <p style={{ fontSize: 13, color: '#aaa', lineHeight: 1.7, marginBottom: 10 }}>
+          Ca. Belén, Puente Piedra 15121<br />
+          <span style={{ fontSize: 11, color: '#666' }}>Código Plus: 4WVF+9C8</span>
+        </p>
+        <a href="https://maps.google.com/?q=4WVF+9C8,Puente+Piedra" target="_blank" rel="noreferrer"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--naranja)', border: '1px solid var(--naranja)', borderRadius: 8, padding: '6px 12px', textDecoration: 'none' }}>
+          🗺️ Ver en Google Maps
+        </a>
+        <p style={{ fontSize: 13, color: '#aaa', marginTop: 12 }}>
+          📱 WhatsApp: <a href="https://wa.me/51968332181" style={{ color: 'var(--naranja)', textDecoration: 'none' }}>+51 968 332 181</a>
+        </p>
+        <p style={{ fontSize: 12, color: '#666', marginTop: 6 }}>
+          🕒 Delivery: 3:00 PM – 9:00 PM
+        </p>
+      </div>
+    </div>
+
+    {/* Línea inferior */}
+    <div style={{ borderTop: '1px solid #333', paddingTop: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+      <p style={{ fontSize: 12, color: '#555' }}>© 2025 Richard Express Market · Todos los derechos reservados</p>
+      {/* Reclamos — discreto */}
+      <a href={`https://wa.me/51968332181?text=${encodeURIComponent('Hola, quisiera hacer un reclamo: ')}`} target="_blank" rel="noreferrer"
+        style={{ fontSize: 11, color: '#444', textDecoration: 'none', borderBottom: '1px dotted #444', paddingBottom: 1 }}>
+        Libro de reclamos
+      </a>
+    </div>
+  </div>
+</footer>
     </div>
   )
 }
