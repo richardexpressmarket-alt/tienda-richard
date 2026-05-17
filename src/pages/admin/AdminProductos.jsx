@@ -227,6 +227,25 @@ async function subirImagen(file, nombre) {
           <option value="">Todas las categorías</option>
           {categorias.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
         </select>
+        <div style={{ position: 'relative', minWidth: 130 }}>
+          <input
+            type="number" min="0"
+            value={filtroStock}
+            onChange={e => setFiltroStock(e.target.value)}
+            placeholder="Stock exacto..."
+            style={{ paddingLeft: 12, width: '100%' }}
+          />
+        </div>
+        <button onClick={() => setFiltroOferta(!filtroOferta)}
+          style={{ padding: '9px 14px', borderRadius: 8, border: `1.5px solid ${filtroOferta ? 'var(--naranja)' : 'var(--borde)'}`, background: filtroOferta ? 'var(--naranja-light)' : 'var(--blanco)', color: filtroOferta ? 'var(--naranja)' : 'var(--texto-suave)', fontSize: 13, fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+          🏷️ Solo ofertas
+        </button>
+        {(filtroCat || filtroStock !== '' || filtroOferta) && (
+          <button onClick={() => { setFiltroCat(''); setFiltroStock(''); setFiltroOferta(false) }}
+            className="btn-ghost" style={{ fontSize: 12, padding: '7px 12px' }}>
+            ✕ Limpiar
+          </button>
+        )}
       </div>
 
       <p style={{ fontSize: 13, color: 'var(--texto-suave)', marginBottom: 14 }}>{filtrados.length} productos</p>
