@@ -27,6 +27,8 @@ export default function AdminProductos() {
   const [imagenFile, setImagenFile] = useState(null)
   const [busqueda, setBusqueda]     = useState('')
   const [filtroCat, setFiltroCat]   = useState('')
+  const [filtroOferta, setFiltroOferta] = useState(false)
+  const [filtroStock, setFiltroStock]   = useState('')
   const inputRef = useRef()
 
   const [searchParams] = useSearchParams()
