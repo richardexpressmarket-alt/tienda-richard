@@ -1,4 +1,4 @@
-¿import { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../store'
 import { ShoppingBag, ChevronDown, ChevronUp, Calendar, Trash2, Download, Plus, X, Search, Package } from 'lucide-react'
