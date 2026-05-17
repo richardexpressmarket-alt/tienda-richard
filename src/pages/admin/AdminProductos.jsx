@@ -197,9 +197,11 @@ async function subirImagen(file, nombre) {
   }
 
   const filtrados = productos.filter(p => {
-    const matchBusq = p.nombre.toLowerCase().includes(busqueda.toLowerCase())
-    const matchCat  = filtroCat ? p.categoria_id === filtroCat : true
-    return matchBusq && matchCat
+    const matchBusq   = p.nombre.toLowerCase().includes(busqueda.toLowerCase())
+    const matchCat    = filtroCat ? p.categoria_id === filtroCat : true
+    const matchOferta = filtroOferta ? p.precio_oferta && Number(p.precio_oferta) > 0 : true
+    const matchStock  = filtroStock !== '' ? p.stock === Number(filtroStock) : true
+    return matchBusq && matchCat && matchOferta && matchStock
   })
 
   return (
