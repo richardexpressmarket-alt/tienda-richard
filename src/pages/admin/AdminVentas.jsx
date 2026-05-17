@@ -6,16 +6,16 @@ import { exportarCSV } from '../../lib/exportar'
 import toast from 'react-hot-toast'
 
 export default function AdminVentas() {
-  const [ventas, setVentas]           = useState([])
-  const [cargando, setCargando]       = useState(true)
-  const [expandida, setExpandida]     = useState(null)
-  const [modalVenta, setModalVenta]   = useState(false)
-  const [productos, setProductos]     = useState([])
-  const [busqueda, setBusqueda]       = useState('')
-  const [carrito, setCarrito]         = useState([])
+  const [ventas, setVentas]               = useState([])
+  const [cargando, setCargando]           = useState(true)
+  const [expandida, setExpandida]         = useState(null)
+  const [modalVenta, setModalVenta]       = useState(false)
+  const [productos, setProductos]         = useState([])
+  const [busqueda, setBusqueda]           = useState('')
+  const [carrito, setCarrito]             = useState([])
   const [nombreCliente, setNombreCliente] = useState('')
-  const [notas, setNotas]             = useState('')
-  const [guardando, setGuardando]     = useState(false)
+  const [notas, setNotas]                 = useState('')
+  const [guardando, setGuardando]         = useState(false)
   const { perfil } = useAuth()
 
   const [desde, setDesde] = useState(() => {
@@ -109,7 +109,7 @@ export default function AdminVentas() {
       const { error: errI } = await supabase.from('venta_items').insert(items)
       if (errI) throw errI
 
-      toast.success('Venta registrada ✅')
+      toast.success('Venta registrada')
       setModalVenta(false)
       cargar()
     } catch (e) {
@@ -119,11 +119,11 @@ export default function AdminVentas() {
   }
 
   async function eliminarVenta(venta) {
-    if (!confirm(`¿Eliminar venta de ${venta.nombre_cliente || 'Cliente'}? Esto restaurará el stock.`)) return
+    if (!confirm('Eliminar esta venta? Esto restaurara el stock.')) return
     try {
       const { error } = await supabase.rpc('revertir_venta', { venta_uuid: venta.id })
       if (error) throw error
-      toast.success('Venta eliminada y stock restaurado ✅')
+      toast.success('Venta eliminada y stock restaurado')
       cargar()
     } catch (e) {
       toast.error('Error: ' + e.message)
@@ -138,13 +138,13 @@ export default function AdminVentas() {
         new Date(v.created_at).toLocaleString('es-PE'),
         v.nombre_cliente || 'Cliente',
         v.perfiles?.nombre || 'Sistema',
-        v.tipo === 'online' ? 'WhatsApp' : 'Física',
-        v.venta_items?.map(i => `${i.nombre_producto} x${i.cantidad}`).join(' | ') || '',
+        v.tipo === 'online' ? 'WhatsApp' : 'Fisica',
+        v.venta_items?.map(i => i.nombre_producto + ' x' + i.cantidad).join(' | ') || '',
         Number(v.total).toFixed(2),
         v.notas || ''
       ])
     ])
-    toast.success('Excel exportado ✅')
+    toast.success('Excel exportado')
   }
 
   const totalPeriodo = ventas.reduce((a, v) => a + Number(v.total), 0)
@@ -165,7 +165,6 @@ export default function AdminVentas() {
         </div>
       </div>
 
-      {/* Filtro fechas */}
       <div className="card" style={{ padding: '16px 20px', marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <Calendar size={16} color="var(--texto-suave)" />
@@ -179,7 +178,9 @@ export default function AdminVentas() {
           </div>
           <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
             <p style={{ fontSize: 12, color: 'var(--texto-suave)' }}>{ventas.length} ventas</p>
-            <p style={{ fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 18, color: 'var(--naranja)' }}>S/ {totalPeriodo.toFixed(2)}</p>
+            <p style={{ fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 18, color: 'var(--naranja)' }}>
+              S/ {totalPeriodo.toFixed(2)}
+            </p>
           </div>
         </div>
       </div>
@@ -187,7 +188,7 @@ export default function AdminVentas() {
       {cargando ? <div className="spinner" /> : ventas.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--texto-suave)' }}>
           <ShoppingBag size={40} style={{ margin: '0 auto 12px', opacity: 0.2 }} />
-          <p>No hay ventas en este período</p>
+          <p>No hay ventas en este periodo</p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -205,7 +206,7 @@ export default function AdminVentas() {
                   </p>
                 </div>
                 <span className={`badge ${v.tipo === 'online' ? 'badge-naranja' : 'badge-verde'}`}>
-                  {v.tipo === 'online' ? 'WhatsApp' : 'Física'}
+                  {v.tipo === 'online' ? 'WhatsApp' : 'Fisica'}
                 </span>
                 <p style={{ fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 16, marginLeft: 8 }}>
                   S/ {Number(v.total).toFixed(2)}
@@ -239,20 +240,19 @@ export default function AdminVentas() {
         </div>
       )}
 
-      {/* Modal agregar venta manual */}
       {modalVenta && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
           <div className="card" style={{ width: '100%', maxWidth: 640, maxHeight: '92vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
 
-            {/* Header */}
             <div style={{ padding: '18px 20px', borderBottom: '1px solid var(--borde)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
               <h2 style={{ fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 18 }}>Agregar venta manual</h2>
-              <button onClick={() => setModalVenta(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={20} color="var(--texto-suave)" /></button>
+              <button onClick={() => setModalVenta(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+                <X size={20} color="var(--texto-suave)" />
+              </button>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', flex: 1, overflow: 'hidden' }}>
 
-              {/* Lista productos */}
               <div style={{ borderRight: '1px solid var(--borde)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                 <div style={{ padding: '12px', borderBottom: '1px solid var(--borde)', flexShrink: 0 }}>
                   <div style={{ position: 'relative' }}>
@@ -280,14 +280,15 @@ export default function AdminVentas() {
                 </div>
               </div>
 
-              {/* Carrito */}
               <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                 <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--borde)', flexShrink: 0 }}>
                   <p style={{ fontSize: 13, fontWeight: 600 }}>Productos seleccionados</p>
                 </div>
                 <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px' }}>
                   {carrito.length === 0 ? (
-                    <p style={{ fontSize: 12, color: 'var(--texto-suave)', textAlign: 'center', padding: '20px 0' }}>Selecciona productos de la izquierda</p>
+                    <p style={{ fontSize: 12, color: 'var(--texto-suave)', textAlign: 'center', padding: '20px 0' }}>
+                      Selecciona productos de la izquierda
+                    </p>
                   ) : (
                     carrito.map(item => (
                       <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--borde)' }}>
@@ -297,30 +298,42 @@ export default function AdminVentas() {
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                           <button onClick={() => cambiarCantidad(item.id, item.cantidad - 1)}
-                            style={{ width: 22, height: 22, borderRadius: 5, background: 'var(--fondo)', border: '1px solid var(--borde)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}>−</button>
+                            style={{ width: 22, height: 22, borderRadius: 5, background: 'var(--fondo)', border: '1px solid var(--borde)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}>
+                            -
+                          </button>
                           <span style={{ fontSize: 13, fontWeight: 600, minWidth: 18, textAlign: 'center' }}>{item.cantidad}</span>
                           <button onClick={() => cambiarCantidad(item.id, item.cantidad + 1)}
-                            style={{ width: 22, height: 22, borderRadius: 5, background: 'var(--naranja-light)', border: '1px solid var(--naranja-mid)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: 'var(--naranja)' }}>+</button>
+                            style={{ width: 22, height: 22, borderRadius: 5, background: 'var(--naranja-light)', border: '1px solid var(--naranja-mid)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: 'var(--naranja)' }}>
+                            +
+                          </button>
                         </div>
-                        <p style={{ fontSize: 12, fontWeight: 700, minWidth: 50, textAlign: 'right' }}>S/ {(item.precio * item.cantidad).toFixed(2)}</p>
+                        <p style={{ fontSize: 12, fontWeight: 700, minWidth: 50, textAlign: 'right' }}>
+                          S/ {(item.precio * item.cantidad).toFixed(2)}
+                        </p>
                         <button onClick={() => setCarrito(prev => prev.filter(i => i.id !== item.id))}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#D00', padding: '2px' }}><X size={13} /></button>
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#D00', padding: '2px' }}>
+                          <X size={13} />
+                        </button>
                       </div>
                     ))
                   )}
                 </div>
 
-                {/* Footer carrito */}
                 <div style={{ padding: '12px 16px', borderTop: '1px solid var(--borde)', flexShrink: 0 }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 10 }}>
-                    <input value={nombreCliente} onChange={e => setNombreCliente(e.target.value)} placeholder="Nombre del cliente (opcional)" style={{ fontSize: 13 }} />
-                    <input value={notas} onChange={e => setNotas(e.target.value)} placeholder="Notas (opcional)" style={{ fontSize: 13 }} />
+                    <input value={nombreCliente} onChange={e => setNombreCliente(e.target.value)}
+                      placeholder="Nombre del cliente (opcional)" style={{ fontSize: 13 }} />
+                    <input value={notas} onChange={e => setNotas(e.target.value)}
+                      placeholder="Notas (opcional)" style={{ fontSize: 13 }} />
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                     <span style={{ fontWeight: 700, fontSize: 15 }}>Total</span>
-                    <span style={{ fontFamily: 'var(--fuente-display)', fontWeight: 800, fontSize: 20, color: 'var(--naranja)' }}>S/ {totalVenta.toFixed(2)}</span>
+                    <span style={{ fontFamily: 'var(--fuente-display)', fontWeight: 800, fontSize: 20, color: 'var(--naranja)' }}>
+                      S/ {totalVenta.toFixed(2)}
+                    </span>
                   </div>
-                  <button onClick={guardarVenta} className="btn-primary" disabled={guardando || carrito.length === 0}
+                  <button onClick={guardarVenta} className="btn-primary"
+                    disabled={guardando || carrito.length === 0}
                     style={{ width: '100%', justifyContent: 'center', padding: '11px', opacity: guardando || carrito.length === 0 ? 0.6 : 1 }}>
                     {guardando ? 'Guardando...' : 'Registrar venta'}
                   </button>
