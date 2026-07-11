@@ -15,6 +15,7 @@ export default function AdminVentas() {
   const [carrito, setCarrito]             = useState([])
   const [nombreCliente, setNombreCliente] = useState('')
   const [notas, setNotas]                 = useState('')
+  const [fechaVenta, setFechaVenta]       = useState(new Date().toISOString().split('T')[0])
   const [guardando, setGuardando]         = useState(false)
   const { perfil } = useAuth()
 
@@ -50,6 +51,7 @@ export default function AdminVentas() {
     setCarrito([])
     setNombreCliente('')
     setNotas('')
+    setFechaVenta(new Date().toISOString().split('T')[0])
     setBusqueda('')
     cargarProductos()
     setModalVenta(true)
@@ -93,6 +95,7 @@ export default function AdminVentas() {
           estado:         'completada',
           nombre_cliente: nombreCliente || 'Cliente general',
           notas:          notas || null,
+          created_at:     new Date(fechaVenta + 'T12:00:00').toISOString(),
         })
         .select()
         .single()
@@ -321,6 +324,13 @@ export default function AdminVentas() {
 
                 <div style={{ padding: '12px 16px', borderTop: '1px solid var(--borde)', flexShrink: 0 }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 10 }}>
+                    <div>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--texto-suave)', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 3 }}>
+                        <Calendar size={11} /> Fecha de la venta
+                      </label>
+                      <input type="date" value={fechaVenta} onChange={e => setFechaVenta(e.target.value)}
+                        style={{ fontSize: 13, width: '100%' }} />
+                    </div>
                     <input value={nombreCliente} onChange={e => setNombreCliente(e.target.value)}
                       placeholder="Nombre del cliente (opcional)" style={{ fontSize: 13 }} />
                     <input value={notas} onChange={e => setNotas(e.target.value)}
