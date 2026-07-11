@@ -95,7 +95,7 @@ export default function AdminVentas() {
           estado:         'completada',
           nombre_cliente: nombreCliente || 'Cliente general',
           notas:          notas || null,
-          created_at:     new Date(fechaVenta + 'T12:00:00').toISOString(),
+          created_at:     fechaVenta + 'T' + new Date().toTimeString().split(' ')[0],
         })
         .select()
         .single()
@@ -138,7 +138,7 @@ export default function AdminVentas() {
     exportarCSV('ventas', [
       ['Fecha', 'Cliente', 'Vendedor', 'Tipo', 'Productos', 'Total (S/)', 'Notas'],
       ...ventas.map(v => [
-        new Date(v.created_at).toLocaleString('es-PE'),
+        new Date(v.created_at).toLocaleDateString('es-PE'),
         v.nombre_cliente || 'Cliente',
         v.perfiles?.nombre || 'Sistema',
         v.tipo === 'online' ? 'WhatsApp' : 'Fisica',
@@ -205,7 +205,7 @@ export default function AdminVentas() {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ fontSize: 14, fontWeight: 600 }}>{v.nombre_cliente || 'Cliente'}</p>
                   <p style={{ fontSize: 12, color: 'var(--texto-suave)' }}>
-                    {new Date(v.created_at).toLocaleString('es-PE')} · {v.perfiles?.nombre || 'Admin'}
+                    {new Date(v.created_at).toLocaleDateString('es-PE')} · {v.perfiles?.nombre || 'Admin'}
                   </p>
                 </div>
                 <span className={`badge ${v.tipo === 'online' ? 'badge-naranja' : 'badge-verde'}`}>
