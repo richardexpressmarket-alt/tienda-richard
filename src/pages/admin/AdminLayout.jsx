@@ -16,6 +16,7 @@ const menu = [
   { to: '/admin/inventario', label: 'Inventario',        icon: BarChart2 },
   { to: '/admin/analisis',   label: 'Análisis',          icon: TrendingUp },
   { to: '/admin/precios',    label: 'Etiquetas',         icon: TagIcon },
+  { to: '/admin/calculador', label: 'Calculador', icon: Calculator },
   { to: '/admin/usuarios',   label: 'Usuarios',          icon: Users },
 ]
 export default function AdminLayout() {
