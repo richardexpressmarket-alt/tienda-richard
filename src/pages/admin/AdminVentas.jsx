@@ -93,7 +93,7 @@ export default function AdminVentas() {
           tipo:           'fisica',
           total:          totalVenta,
           estado:         'completada',
-          nombre_cliente: nombreCliente || 'Cliente general',
+          nombre_cliente: nombreCliente || null,
           notas:          notas || null,
           created_at:     fechaVenta + 'T' + new Date().toTimeString().split(' ')[0],
         })
@@ -136,13 +136,13 @@ export default function AdminVentas() {
   function handleExportar() {
     if (ventas.length === 0) return toast.error('No hay ventas para exportar')
     exportarCSV('ventas', [
-      ['Fecha', 'Cliente', 'Vendedor', 'Tipo', 'Productos', 'Total (S/)', 'Notas'],
+      ['Fecha', 'Productos', 'Cliente', 'Vendedor', 'Tipo', 'Total (S/)', 'Notas'],
       ...ventas.map(v => [
         new Date(v.created_at).toLocaleDateString('es-PE'),
-        v.nombre_cliente || 'Cliente',
+        v.venta_items?.map(i => i.nombre_producto + ' x' + i.cantidad).join(', ') || '',
+        v.nombre_cliente || '',
         v.perfiles?.nombre || 'Sistema',
         v.tipo === 'online' ? 'WhatsApp' : 'Fisica',
-        v.venta_items?.map(i => i.nombre_producto + ' x' + i.cantidad).join(' | ') || '',
         Number(v.total).toFixed(2),
         v.notas || ''
       ])
@@ -151,6 +151,13 @@ export default function AdminVentas() {
   }
 
   const totalPeriodo = ventas.reduce((a, v) => a + Number(v.total), 0)
+
+  function resumenProductos(items) {
+    if (!items || items.length === 0) return 'Sin productos'
+    const nombres = items.map(i => i.nombre_producto + ' x' + i.cantidad)
+    const texto = nombres.join(', ')
+    return texto.length > 60 ? texto.substring(0, 57) + '...' : texto
+  }
 
   return (
     <div>
@@ -203,9 +210,13 @@ export default function AdminVentas() {
                   <ShoppingBag size={16} color={v.tipo === 'online' ? 'var(--naranja)' : '#2E7D32'} />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ fontSize: 14, fontWeight: 600 }}>{v.nombre_cliente || 'Cliente'}</p>
-                  <p style={{ fontSize: 12, color: 'var(--texto-suave)' }}>
-                    {new Date(v.created_at).toLocaleDateString('es-PE')} · {v.perfiles?.nombre || 'Admin'}
+                  <p style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {resumenProductos(v.venta_items)}
+                  </p>
+                  <p style={{ fontSize: 11, color: 'var(--texto-suave)' }}>
+                    {new Date(v.created_at).toLocaleDateString('es-PE')}
+                    {v.nombre_cliente ? ` · ${v.nombre_cliente}` : ''}
+                    {' · '}{v.perfiles?.nombre || 'Admin'}
                   </p>
                 </div>
                 <span className={`badge ${v.tipo === 'online' ? 'badge-naranja' : 'badge-verde'}`}>
