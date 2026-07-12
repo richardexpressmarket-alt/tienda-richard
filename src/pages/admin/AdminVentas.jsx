@@ -1,14 +1,13 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../store'
-import { ShoppingBag, ChevronDown, ChevronUp, Calendar, Trash2, Download, Plus, X, Search, Package } from 'lucide-react'
+import { ShoppingBag, Calendar, Trash2, Download, Plus, X, Search, Package } from 'lucide-react'
 import { exportarCSV } from '../../lib/exportar'
 import toast from 'react-hot-toast'
 
 export default function AdminVentas() {
   const [ventas, setVentas]               = useState([])
   const [cargando, setCargando]           = useState(true)
-  const [expandida, setExpandida]         = useState(null)
   const [modalVenta, setModalVenta]       = useState(false)
   const [productos, setProductos]         = useState([])
   const [busqueda, setBusqueda]           = useState('')
@@ -133,31 +132,40 @@ export default function AdminVentas() {
     }
   }
 
+  // Aplanar ventas en líneas individuales por producto
+  const lineas = ventas.flatMap(v =>
+    (v.venta_items || []).map(item => ({
+      ...item,
+      fecha: v.created_at,
+      vendedor: v.perfiles?.nombre || 'Admin',
+      cliente: v.nombre_cliente,
+      tipo: v.tipo,
+      venta_id: v.id,
+      notas: v.notas,
+    }))
+  )
+
   function handleExportar() {
-    if (ventas.length === 0) return toast.error('No hay ventas para exportar')
+    if (lineas.length === 0) return toast.error('No hay ventas para exportar')
     exportarCSV('ventas', [
-      ['Fecha', 'Productos', 'Cliente', 'Vendedor', 'Tipo', 'Total (S/)', 'Notas'],
-      ...ventas.map(v => [
-        new Date(v.created_at).toLocaleDateString('es-PE'),
-        v.venta_items?.map(i => i.nombre_producto + ' x' + i.cantidad).join(', ') || '',
-        v.nombre_cliente || '',
-        v.perfiles?.nombre || 'Sistema',
-        v.tipo === 'online' ? 'WhatsApp' : 'Fisica',
-        Number(v.total).toFixed(2),
-        v.notas || ''
+      ['Fecha', 'Producto', 'Cantidad', 'Precio Ud.', 'Subtotal', 'Cliente', 'Vendedor', 'Tipo', 'Notas'],
+      ...lineas.map(l => [
+        new Date(l.fecha).toLocaleDateString('es-PE'),
+        l.nombre_producto,
+        l.cantidad,
+        Number(l.precio_unitario).toFixed(2),
+        Number(l.subtotal).toFixed(2),
+        l.cliente || '',
+        l.vendedor,
+        l.tipo === 'online' ? 'WhatsApp' : 'Fisica',
+        l.notas || ''
       ])
     ])
     toast.success('Excel exportado')
   }
 
   const totalPeriodo = ventas.reduce((a, v) => a + Number(v.total), 0)
-
-  function resumenProductos(items) {
-    if (!items || items.length === 0) return 'Sin productos'
-    const nombres = items.map(i => i.nombre_producto + ' x' + i.cantidad)
-    const texto = nombres.join(', ')
-    return texto.length > 60 ? texto.substring(0, 57) + '...' : texto
-  }
+  const totalProductos = lineas.reduce((a, l) => a + l.cantidad, 0)
 
   return (
     <div>
@@ -187,7 +195,7 @@ export default function AdminVentas() {
             <input type="date" value={hasta} onChange={e => setHasta(e.target.value)} style={{ width: 'auto', padding: '6px 10px' }} />
           </div>
           <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
-            <p style={{ fontSize: 12, color: 'var(--texto-suave)' }}>{ventas.length} ventas</p>
+            <p style={{ fontSize: 12, color: 'var(--texto-suave)' }}>{ventas.length} ventas · {totalProductos} productos</p>
             <p style={{ fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 18, color: 'var(--naranja)' }}>
               S/ {totalPeriodo.toFixed(2)}
             </p>
@@ -195,60 +203,51 @@ export default function AdminVentas() {
         </div>
       </div>
 
-      {cargando ? <div className="spinner" /> : ventas.length === 0 ? (
+      {cargando ? <div className="spinner" /> : lineas.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--texto-suave)' }}>
           <ShoppingBag size={40} style={{ margin: '0 auto 12px', opacity: 0.2 }} />
           <p>No hay ventas en este periodo</p>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {ventas.map(v => (
-            <div key={v.id} className="card" style={{ overflow: 'hidden' }}>
-              <button onClick={() => setExpandida(expandida === v.id ? null : v.id)}
-                style={{ width: '100%', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
-                <div style={{ width: 36, height: 36, borderRadius: 10, background: v.tipo === 'online' ? 'var(--naranja-light)' : '#E8F5E9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <ShoppingBag size={16} color={v.tipo === 'online' ? 'var(--naranja)' : '#2E7D32'} />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {resumenProductos(v.venta_items)}
-                  </p>
-                  <p style={{ fontSize: 11, color: 'var(--texto-suave)' }}>
-                    {new Date(v.created_at).toLocaleDateString('es-PE')}
-                    {v.nombre_cliente ? ` · ${v.nombre_cliente}` : ''}
-                    {' · '}{v.perfiles?.nombre || 'Admin'}
-                  </p>
-                </div>
-                <span className={`badge ${v.tipo === 'online' ? 'badge-naranja' : 'badge-verde'}`}>
-                  {v.tipo === 'online' ? 'WhatsApp' : 'Fisica'}
-                </span>
-                <p style={{ fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 16, marginLeft: 8 }}>
-                  S/ {Number(v.total).toFixed(2)}
-                </p>
-                {expandida === v.id ? <ChevronUp size={16} color="var(--texto-suave)" /> : <ChevronDown size={16} color="var(--texto-suave)" />}
-              </button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {lineas.map((l, idx) => (
+            <div key={l.id || idx} className="card" style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
 
-              {expandida === v.id && (
-                <div style={{ borderTop: '1px solid var(--borde)', padding: '14px 16px', background: 'var(--fondo)' }}>
-                  {v.venta_items?.map(item => (
-                    <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', borderBottom: '1px solid var(--borde)' }}>
-                      {item.productos?.imagen_url && (
-                        <img src={item.productos.imagen_url} alt={item.nombre_producto} style={{ width: 36, height: 36, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }} />
-                      )}
-                      <p style={{ flex: 1, fontSize: 13 }}>{item.nombre_producto}</p>
-                      <p style={{ fontSize: 13, color: 'var(--texto-suave)' }}>x{item.cantidad}</p>
-                      <p style={{ fontSize: 13, fontWeight: 600 }}>S/ {Number(item.subtotal).toFixed(2)}</p>
-                    </div>
-                  ))}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, paddingTop: 8 }}>
-                    <button onClick={() => eliminarVenta(v)} className="btn-danger" style={{ fontSize: 12 }}>
-                      <Trash2 size={13} /> Eliminar y restaurar stock
-                    </button>
-                    <p style={{ fontWeight: 700 }}>Total: <span style={{ color: 'var(--naranja)' }}>S/ {Number(v.total).toFixed(2)}</span></p>
+              {l.productos?.imagen_url
+                ? <img src={l.productos.imagen_url} alt={l.nombre_producto} style={{ width: 42, height: 42, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }} />
+                : <div style={{ width: 42, height: 42, borderRadius: 8, background: 'var(--fondo)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <Package size={18} color="var(--borde)" />
                   </div>
-                  {v.notas && <p style={{ fontSize: 12, color: 'var(--texto-suave)', marginTop: 6 }}>Nota: {v.notas}</p>}
-                </div>
-              )}
+              }
+
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {l.nombre_producto}
+                </p>
+                <p style={{ fontSize: 11, color: 'var(--texto-suave)', marginTop: 2 }}>
+                  {new Date(l.fecha).toLocaleDateString('es-PE')}
+                  {' · '}{l.vendedor}
+                  {l.cliente ? ` · ${l.cliente}` : ''}
+                </p>
+              </div>
+
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                {l.cantidad > 1 ? (
+                  <>
+                    <p style={{ fontSize: 11, color: 'var(--texto-suave)' }}>
+                      x{l.cantidad} · S/ {Number(l.precio_unitario).toFixed(2)} c/u
+                    </p>
+                    <p style={{ fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 15, color: 'var(--naranja)' }}>
+                      S/ {Number(l.subtotal).toFixed(2)}
+                    </p>
+                  </>
+                ) : (
+                  <p style={{ fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 15 }}>
+                    S/ {Number(l.subtotal).toFixed(2)}
+                  </p>
+                )}
+              </div>
+
             </div>
           ))}
         </div>
