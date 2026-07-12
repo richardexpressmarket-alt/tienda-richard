@@ -254,7 +254,7 @@ export default function AdminVentas() {
                 )}
               </div>
 
-              <button onClick={() => eliminarVenta(l.venta_id)}
+              onClick={() => eliminarVenta(l.id, l.items_count === 1)}
                 title={l.items_count > 1 ? `Eliminar venta completa (${l.items_count} productos) y restaurar stock` : 'Eliminar y restaurar stock'}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, flexShrink: 0, opacity: 0.4, transition: 'opacity 0.2s' }}
                 onMouseEnter={e => e.currentTarget.style.opacity = 1}
