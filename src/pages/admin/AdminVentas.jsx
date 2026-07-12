@@ -79,7 +79,11 @@ export default function AdminVentas() {
     setCarrito(prev => prev.map(i => i.id === id ? { ...i, cantidad } : i))
   }
 
-  const totalVenta = carrito.reduce((a, i) => a + i.precio * i.cantidad, 0)
+  function cambiarPrecio(id, valor) {
+    setCarrito(prev => prev.map(i => i.id === id ? { ...i, precio: valor } : i))
+  }
+
+  const totalVenta = carrito.reduce((a, i) => a + (Number(i.precio) || 0) * i.cantidad, 0)
 
   async function guardarVenta() {
     if (carrito.length === 0) return toast.error('Agrega al menos un producto')
@@ -104,9 +108,9 @@ export default function AdminVentas() {
         venta_id:        venta.id,
         producto_id:     i.id,
         nombre_producto: i.nombre,
-        precio_unitario: i.precio,
+        precio_unitario: Number(i.precio) || 0,
         cantidad:        i.cantidad,
-        subtotal:        i.precio * i.cantidad,
+        subtotal:        (Number(i.precio) || 0) * i.cantidad,
       }))
       const { error: errI } = await supabase.from('venta_items').insert(items)
       if (errI) throw errI
@@ -319,7 +323,22 @@ export default function AdminVentas() {
                       <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--borde)' }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <p style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.nombre}</p>
-                          <p style={{ fontSize: 11, color: 'var(--naranja)' }}>S/ {Number(item.precio).toFixed(2)}</p>
+                          {['kg', 'g', 'kilo', 'gramo', 'gramos', 'kilos'].includes(item.unidad?.toLowerCase()) ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                              <span style={{ fontSize: 11, color: 'var(--naranja)' }}>S/</span>
+                              <input
+                                type="number"
+                                value={item.precio}
+                                onChange={(e) => cambiarPrecio(item.id, e.target.value)}
+                                style={{ width: 70, fontSize: 12, padding: '2px 4px', border: '1px solid var(--borde)', borderRadius: 4, outline: 'none' }}
+                                step="0.01"
+                                min="0"
+                                placeholder="0.00"
+                              />
+                            </div>
+                          ) : (
+                            <p style={{ fontSize: 11, color: 'var(--naranja)' }}>S/ {Number(item.precio).toFixed(2)}</p>
+                          )}
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                           <button onClick={() => cambiarCantidad(item.id, item.cantidad - 1)}
@@ -333,7 +352,7 @@ export default function AdminVentas() {
                           </button>
                         </div>
                         <p style={{ fontSize: 12, fontWeight: 700, minWidth: 50, textAlign: 'right' }}>
-                          S/ {(item.precio * item.cantidad).toFixed(2)}
+                          S/ {((Number(item.precio) || 0) * item.cantidad).toFixed(2)}
                         </p>
                         <button onClick={() => setCarrito(prev => prev.filter(i => i.id !== item.id))}
                           style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#D00', padding: '2px' }}>
