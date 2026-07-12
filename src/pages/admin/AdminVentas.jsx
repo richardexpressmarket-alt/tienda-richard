@@ -120,17 +120,20 @@ export default function AdminVentas() {
     setGuardando(false)
   }
 
-  async function eliminarVenta(ventaId) {
-    if (!confirm('¿Eliminar esta venta completa? Se restaurará el stock de todos los productos.')) return
-    try {
-      const { error } = await supabase.rpc('revertir_venta', { venta_uuid: ventaId })
-      if (error) throw error
-      toast.success('Venta eliminada y stock restaurado')
-      cargar()
-    } catch (e) {
-      toast.error('Error: ' + e.message)
-    }
+  async function eliminarVenta(itemId, esUltimo) {
+  const msg = esUltimo
+    ? '¿Eliminar este producto? Era el único, se eliminará la venta completa y se restaurará el stock.'
+    : '¿Eliminar este producto de la venta? Se restaurará su stock.'
+  if (!confirm(msg)) return
+  try {
+    const { error } = await supabase.rpc('revertir_item', { item_uuid: itemId })
+    if (error) throw error
+    toast.success('Producto eliminado y stock restaurado')
+    cargar()
+  } catch (e) {
+    toast.error('Error: ' + e.message)
   }
+}
 
   // Aplanar ventas en líneas individuales por producto
   const lineas = ventas.flatMap(v =>
