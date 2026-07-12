@@ -83,7 +83,7 @@ export default function AdminVentas() {
     setCarrito(prev => prev.map(i => i.id === id ? { ...i, precio: valor } : i))
   }
 
-  const totalVenta = carrito.reduce((a, i) => a + (Number(i.precio) || 0) * i.cantidad, 0)
+  const totalVenta = carrito.reduce((a, i) => a + (parseFloat(i.precio) || 0) * i.cantidad, 0)
 
   async function guardarVenta() {
     if (carrito.length === 0) return toast.error('Agrega al menos un producto')
@@ -108,9 +108,9 @@ export default function AdminVentas() {
         venta_id:        venta.id,
         producto_id:     i.id,
         nombre_producto: i.nombre,
-        precio_unitario: Number(i.precio) || 0,
+        precio_unitario: parseFloat(i.precio) || 0,
         cantidad:        i.cantidad,
-        subtotal:        (Number(i.precio) || 0) * i.cantidad,
+        subtotal:        (parseFloat(i.precio) || 0) * i.cantidad,
       }))
       const { error: errI } = await supabase.from('venta_items').insert(items)
       if (errI) throw errI
@@ -125,19 +125,19 @@ export default function AdminVentas() {
   }
 
   async function eliminarVenta(itemId, esUltimo) {
-  const msg = esUltimo
-    ? '¿Eliminar este producto? Era el único, se eliminará la venta completa y se restaurará el stock.'
-    : '¿Eliminar este producto de la venta? Se restaurará su stock.'
-  if (!confirm(msg)) return
-  try {
-    const { error } = await supabase.rpc('revertir_item', { item_uuid: itemId })
-    if (error) throw error
-    toast.success('Producto eliminado y stock restaurado')
-    cargar()
-  } catch (e) {
-    toast.error('Error: ' + e.message)
+    const msg = esUltimo
+      ? '¿Eliminar este producto? Era el único, se eliminará la venta completa y se restaurará el stock.'
+      : '¿Eliminar este producto de la venta? Se restaurará su stock.'
+    if (!confirm(msg)) return
+    try {
+      const { error } = await supabase.rpc('revertir_item', { item_uuid: itemId })
+      if (error) throw error
+      toast.success('Producto eliminado y stock restaurado')
+      cargar()
+    } catch (e) {
+      toast.error('Error: ' + e.message)
+    }
   }
-}
 
   // Aplanar ventas en líneas individuales por producto
   const lineas = ventas.flatMap(v =>
@@ -259,10 +259,10 @@ export default function AdminVentas() {
               </div>
 
               <button
-  onClick={() => eliminarVenta(l.id, l.items_count === 1)}
-  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, flexShrink: 0, color: '#D00' }}>
-  <Trash2 size={15} />
-</button>
+                onClick={() => eliminarVenta(l.id, l.items_count === 1)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, flexShrink: 0, color: '#D00' }}>
+                <Trash2 size={15} />
+              </button>
 
             </div>
           ))}
@@ -323,22 +323,29 @@ export default function AdminVentas() {
                       <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--borde)' }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <p style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.nombre}</p>
-                          {['kg', 'g', 'kilo', 'gramo', 'gramos', 'kilos'].includes(item.unidad?.toLowerCase()) ? (
+                          
+                          {(item.unidad && /kg|kilo|g|gramo|gr/i.test(item.unidad)) ? (
                             <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
                               <span style={{ fontSize: 11, color: 'var(--naranja)' }}>S/</span>
                               <input
-                                type="number"
+                                type="text"
+                                inputMode="decimal"
                                 value={item.precio}
-                                onChange={(e) => cambiarPrecio(item.id, e.target.value)}
+                                onChange={(e) => {
+                                  // Solo permite números y un solo punto
+                                  const val = e.target.value.replace(/[^0-9.]/g, '');
+                                  if (val.split('.').length > 2) return; // Previene múltiples puntos
+                                  cambiarPrecio(item.id, val);
+                                }}
+                                onFocus={(e) => e.target.select()}
                                 style={{ width: 70, fontSize: 12, padding: '2px 4px', border: '1px solid var(--borde)', borderRadius: 4, outline: 'none' }}
-                                step="0.01"
-                                min="0"
                                 placeholder="0.00"
                               />
                             </div>
                           ) : (
                             <p style={{ fontSize: 11, color: 'var(--naranja)' }}>S/ {Number(item.precio).toFixed(2)}</p>
                           )}
+                          
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                           <button onClick={() => cambiarCantidad(item.id, item.cantidad - 1)}
@@ -352,7 +359,7 @@ export default function AdminVentas() {
                           </button>
                         </div>
                         <p style={{ fontSize: 12, fontWeight: 700, minWidth: 50, textAlign: 'right' }}>
-                          S/ {((Number(item.precio) || 0) * item.cantidad).toFixed(2)}
+                          S/ {((parseFloat(item.precio) || 0) * item.cantidad).toFixed(2)}
                         </p>
                         <button onClick={() => setCarrito(prev => prev.filter(i => i.id !== item.id))}
                           style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#D00', padding: '2px' }}>
