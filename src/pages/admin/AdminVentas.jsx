@@ -120,10 +120,10 @@ export default function AdminVentas() {
     setGuardando(false)
   }
 
-  async function eliminarVenta(venta) {
-    if (!confirm('Eliminar esta venta? Esto restaurara el stock.')) return
+  async function eliminarVenta(ventaId) {
+    if (!confirm('¿Eliminar esta venta completa? Se restaurará el stock de todos los productos.')) return
     try {
-      const { error } = await supabase.rpc('revertir_venta', { venta_uuid: venta.id })
+      const { error } = await supabase.rpc('revertir_venta', { venta_uuid: ventaId })
       if (error) throw error
       toast.success('Venta eliminada y stock restaurado')
       cargar()
@@ -142,6 +142,8 @@ export default function AdminVentas() {
       tipo: v.tipo,
       venta_id: v.id,
       notas: v.notas,
+      total_venta: v.total,
+      items_count: v.venta_items?.length || 1,
     }))
   )
 
@@ -228,6 +230,7 @@ export default function AdminVentas() {
                   {new Date(l.fecha).toLocaleDateString('es-PE')}
                   {' · '}{l.vendedor}
                   {l.cliente ? ` · ${l.cliente}` : ''}
+                  {l.notas ? ` · ${l.notas}` : ''}
                 </p>
               </div>
 
@@ -247,6 +250,14 @@ export default function AdminVentas() {
                   </p>
                 )}
               </div>
+
+              <button onClick={() => eliminarVenta(l.venta_id)}
+                title={l.items_count > 1 ? `Eliminar venta completa (${l.items_count} productos) y restaurar stock` : 'Eliminar y restaurar stock'}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, flexShrink: 0, opacity: 0.4, transition: 'opacity 0.2s' }}
+                onMouseEnter={e => e.currentTarget.style.opacity = 1}
+                onMouseLeave={e => e.currentTarget.style.opacity = 0.4}>
+                <Trash2 size={15} color="#D00" />
+              </button>
 
             </div>
           ))}
