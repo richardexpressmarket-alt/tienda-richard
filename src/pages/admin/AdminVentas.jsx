@@ -11,13 +11,13 @@ export default function AdminVentas() {
   const [modalVenta, setModalVenta]       = useState(false)
   const [productos, setProductos]         = useState([])
   const [busqueda, setBusqueda]           = useState('')
+  const [busquedaVentas, setBusquedaVentas] = useState('') // Nuevo estado para el buscador principal
   const [carrito, setCarrito]             = useState([])
   const [nombreCliente, setNombreCliente] = useState('')
   const [notas, setNotas]                 = useState('')
   const [fechaVenta, setFechaVenta]       = useState(new Date().toISOString().split('T')[0])
   const [guardando, setGuardando]         = useState(false)
   
-  // Nuevo estado para mostrar/ocultar opciones de cliente
   const [mostrarOpcionesCliente, setMostrarOpcionesCliente] = useState(false)
   
   const { perfil } = useAuth()
@@ -61,27 +61,29 @@ export default function AdminVentas() {
     setModalVenta(true)
   }
 
+  // Función para normalizar texto (quitar tildes y pasar a minúsculas)
+  const normalizarTexto = (texto) => {
+    return texto ? texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() : "";
+  }
+
+  // Filtro del modal de agregar venta
   const prodsFiltrados = busqueda.trim()
-    ? productos.filter(p => p.nombre.toLowerCase().includes(busqueda.toLowerCase()))
+    ? productos.filter(p => normalizarTexto(p.nombre).includes(normalizarTexto(busqueda)))
     : productos
 
-  // MODIFICADO: Agrega un nuevo ítem siempre, sin agrupar cantidades
   function agregarAlCarrito(p) {
     if (p.stock < 1) return toast.error('Sin stock')
     
-    // Verificamos que no exceda el stock total disponible del producto en el carrito
     const agregados = carrito.filter(i => i.id === p.id).length
     if (agregados >= p.stock) return toast.error('Stock insuficiente')
 
     setCarrito(prev => [...prev, { ...p, cartId: Date.now() + Math.random(), cantidad: 1 }])
   }
 
-  // MODIFICADO: Elimina por cartId único
   function quitar(cartId) { 
     setCarrito(prev => prev.filter(i => i.cartId !== cartId)) 
   }
 
-  // MODIFICADO: Actualiza el precio usando cartId único
   function cambiarPrecio(cartId, valor) {
     setCarrito(prev => prev.map(i => i.cartId === cartId ? { ...i, precio: valor } : i))
   }
@@ -142,6 +144,7 @@ export default function AdminVentas() {
     }
   }
 
+  // Preparamos todas las líneas de ventas
   const lineas = ventas.flatMap(v =>
     (v.venta_items || []).map(item => ({
       ...item,
@@ -156,11 +159,17 @@ export default function AdminVentas() {
     }))
   )
 
+  // Filtramos las líneas de venta según la búsqueda principal (ignora mayúsculas y tildes)
+  const lineasFiltradas = lineas.filter(l => {
+    if (!busquedaVentas.trim()) return true;
+    return normalizarTexto(l.nombre_producto).includes(normalizarTexto(busquedaVentas));
+  })
+
   function handleExportar() {
-    if (lineas.length === 0) return toast.error('No hay ventas para exportar')
+    if (lineasFiltradas.length === 0) return toast.error('No hay ventas para exportar')
     exportarCSV('ventas', [
       ['Fecha', 'Producto', 'Cantidad', 'Precio Ud.', 'Subtotal', 'Cliente', 'Vendedor', 'Tipo', 'Notas'],
-      ...lineas.map(l => [
+      ...lineasFiltradas.map(l => [
         new Date(l.fecha).toLocaleDateString('es-PE'),
         l.nombre_producto,
         l.cantidad,
@@ -175,8 +184,9 @@ export default function AdminVentas() {
     toast.success('Excel exportado')
   }
 
-  const totalPeriodo = ventas.reduce((a, v) => a + Number(v.total), 0)
-  const totalProductos = lineas.reduce((a, l) => a + l.cantidad, 0)
+  // Totales dinámicos basados en la búsqueda actual
+  const totalPeriodo = lineasFiltradas.reduce((a, l) => a + Number(l.subtotal), 0)
+  const totalProductos = lineasFiltradas.reduce((a, l) => a + l.cantidad, 0)
 
   return (
     <div>
@@ -196,7 +206,20 @@ export default function AdminVentas() {
 
       <div className="card" style={{ padding: '16px 20px', marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <Calendar size={16} color="var(--texto-suave)" />
+          
+          {/* NUEVO: Buscador de ventas */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '1 1 200px', border: '1px solid var(--borde)', padding: '6px 12px', borderRadius: 8 }}>
+            <Search size={15} color="var(--texto-suave)" />
+            <input 
+              type="text" 
+              value={busquedaVentas} 
+              onChange={e => setBusquedaVentas(e.target.value)} 
+              placeholder="Buscar producto vendido..." 
+              style={{ border: 'none', background: 'transparent', width: '100%', outline: 'none', fontSize: 13 }} 
+            />
+          </div>
+
+          <Calendar size={16} color="var(--texto-suave)" style={{ marginLeft: 10 }} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <label style={{ fontSize: 13, color: 'var(--texto-suave)' }}>Desde</label>
             <input type="date" value={desde} onChange={e => setDesde(e.target.value)} style={{ width: 'auto', padding: '6px 10px' }} />
@@ -205,8 +228,8 @@ export default function AdminVentas() {
             <label style={{ fontSize: 13, color: 'var(--texto-suave)' }}>Hasta</label>
             <input type="date" value={hasta} onChange={e => setHasta(e.target.value)} style={{ width: 'auto', padding: '6px 10px' }} />
           </div>
-          <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
-            {/* MODIFICADO: Eliminado el texto de "X ventas" para solo mostrar los productos */}
+          
+          <div style={{ marginLeft: 'auto', textAlign: 'right', minWidth: '120px' }}>
             <p style={{ fontSize: 12, color: 'var(--texto-suave)' }}>{totalProductos} productos vendidos</p>
             <p style={{ fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 18, color: 'var(--naranja)' }}>
               S/ {totalPeriodo.toFixed(2)}
@@ -215,14 +238,14 @@ export default function AdminVentas() {
         </div>
       </div>
 
-      {cargando ? <div className="spinner" /> : lineas.length === 0 ? (
+      {cargando ? <div className="spinner" /> : lineasFiltradas.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--texto-suave)' }}>
           <ShoppingBag size={40} style={{ margin: '0 auto 12px', opacity: 0.2 }} />
-          <p>No hay ventas en este periodo</p>
+          <p>{busquedaVentas ? 'No se encontraron productos con esa búsqueda' : 'No hay ventas en este periodo'}</p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {lineas.map((l, idx) => (
+          {lineasFiltradas.map((l, idx) => (
             <div key={l.id || idx} className="card" style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
 
               {l.productos?.imagen_url
@@ -272,6 +295,7 @@ export default function AdminVentas() {
         </div>
       )}
 
+      {/* Modal de Nueva Venta... (Sin cambios) */}
       {modalVenta && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
           <div className="card" style={{ width: '100%', maxWidth: 640, maxHeight: '92vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
@@ -372,7 +396,6 @@ export default function AdminVentas() {
                         style={{ fontSize: 13, width: '100%' }} />
                     </div>
                     
-                    {/* MODIFICADO: Toggle para mostrar las opciones de Cliente y Notas */}
                     <button
                       onClick={() => setMostrarOpcionesCliente(!mostrarOpcionesCliente)}
                       style={{ background: 'none', border: 'none', color: 'var(--naranja)', fontSize: 12, cursor: 'pointer', textAlign: 'left', fontWeight: 600, marginTop: 4 }}>
