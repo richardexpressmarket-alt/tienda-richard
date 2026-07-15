@@ -16,6 +16,10 @@ export default function AdminVentas() {
   const [notas, setNotas]                 = useState('')
   const [fechaVenta, setFechaVenta]       = useState(new Date().toISOString().split('T')[0])
   const [guardando, setGuardando]         = useState(false)
+  
+  // Nuevo estado para mostrar/ocultar opciones de cliente
+  const [mostrarOpcionesCliente, setMostrarOpcionesCliente] = useState(false)
+  
   const { perfil } = useAuth()
 
   const [desde, setDesde] = useState(() => {
@@ -52,6 +56,7 @@ export default function AdminVentas() {
     setNotas('')
     setFechaVenta(new Date().toISOString().split('T')[0])
     setBusqueda('')
+    setMostrarOpcionesCliente(false)
     cargarProductos()
     setModalVenta(true)
   }
@@ -60,27 +65,25 @@ export default function AdminVentas() {
     ? productos.filter(p => p.nombre.toLowerCase().includes(busqueda.toLowerCase()))
     : productos
 
+  // MODIFICADO: Agrega un nuevo ítem siempre, sin agrupar cantidades
   function agregarAlCarrito(p) {
     if (p.stock < 1) return toast.error('Sin stock')
-    setCarrito(prev => {
-      const ex = prev.find(i => i.id === p.id)
-      if (ex) {
-        if (ex.cantidad >= p.stock) { toast.error('Stock insuficiente'); return prev }
-        return prev.map(i => i.id === p.id ? { ...i, cantidad: i.cantidad + 1 } : i)
-      }
-      return [...prev, { ...p, cantidad: 1 }]
-    })
+    
+    // Verificamos que no exceda el stock total disponible del producto en el carrito
+    const agregados = carrito.filter(i => i.id === p.id).length
+    if (agregados >= p.stock) return toast.error('Stock insuficiente')
+
+    setCarrito(prev => [...prev, { ...p, cartId: Date.now() + Math.random(), cantidad: 1 }])
   }
 
-  function cambiarCantidad(id, cantidad) {
-    if (cantidad < 1) return
-    const prod = productos.find(p => p.id === id)
-    if (prod && cantidad > prod.stock) return toast.error('Stock insuficiente')
-    setCarrito(prev => prev.map(i => i.id === id ? { ...i, cantidad } : i))
+  // MODIFICADO: Elimina por cartId único
+  function quitar(cartId) { 
+    setCarrito(prev => prev.filter(i => i.cartId !== cartId)) 
   }
 
-  function cambiarPrecio(id, valor) {
-    setCarrito(prev => prev.map(i => i.id === id ? { ...i, precio: valor } : i))
+  // MODIFICADO: Actualiza el precio usando cartId único
+  function cambiarPrecio(cartId, valor) {
+    setCarrito(prev => prev.map(i => i.cartId === cartId ? { ...i, precio: valor } : i))
   }
 
   const totalVenta = carrito.reduce((a, i) => a + (parseFloat(i.precio) || 0) * i.cantidad, 0)
@@ -139,7 +142,6 @@ export default function AdminVentas() {
     }
   }
 
-  // Aplanar ventas en líneas individuales por producto
   const lineas = ventas.flatMap(v =>
     (v.venta_items || []).map(item => ({
       ...item,
@@ -204,7 +206,8 @@ export default function AdminVentas() {
             <input type="date" value={hasta} onChange={e => setHasta(e.target.value)} style={{ width: 'auto', padding: '6px 10px' }} />
           </div>
           <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
-            <p style={{ fontSize: 12, color: 'var(--texto-suave)' }}>{ventas.length} ventas · {totalProductos} productos</p>
+            {/* MODIFICADO: Eliminado el texto de "X ventas" para solo mostrar los productos */}
+            <p style={{ fontSize: 12, color: 'var(--texto-suave)' }}>{totalProductos} productos vendidos</p>
             <p style={{ fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 18, color: 'var(--naranja)' }}>
               S/ {totalPeriodo.toFixed(2)}
             </p>
@@ -320,7 +323,7 @@ export default function AdminVentas() {
                     </p>
                   ) : (
                     carrito.map(item => (
-                      <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--borde)' }}>
+                      <div key={item.cartId} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--borde)' }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <p style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.nombre}</p>
                           
@@ -332,10 +335,9 @@ export default function AdminVentas() {
                                 inputMode="decimal"
                                 value={item.precio}
                                 onChange={(e) => {
-                                  // Solo permite números y un solo punto
                                   const val = e.target.value.replace(/[^0-9.]/g, '');
-                                  if (val.split('.').length > 2) return; // Previene múltiples puntos
-                                  cambiarPrecio(item.id, val);
+                                  if (val.split('.').length > 2) return;
+                                  cambiarPrecio(item.cartId, val);
                                 }}
                                 onFocus={(e) => e.target.select()}
                                 style={{ width: 70, fontSize: 12, padding: '2px 4px', border: '1px solid var(--borde)', borderRadius: 4, outline: 'none' }}
@@ -347,21 +349,11 @@ export default function AdminVentas() {
                           )}
                           
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <button onClick={() => cambiarCantidad(item.id, item.cantidad - 1)}
-                            style={{ width: 22, height: 22, borderRadius: 5, background: 'var(--fondo)', border: '1px solid var(--borde)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}>
-                            -
-                          </button>
-                          <span style={{ fontSize: 13, fontWeight: 600, minWidth: 18, textAlign: 'center' }}>{item.cantidad}</span>
-                          <button onClick={() => cambiarCantidad(item.id, item.cantidad + 1)}
-                            style={{ width: 22, height: 22, borderRadius: 5, background: 'var(--naranja-light)', border: '1px solid var(--naranja-mid)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: 'var(--naranja)' }}>
-                            +
-                          </button>
-                        </div>
+                        
                         <p style={{ fontSize: 12, fontWeight: 700, minWidth: 50, textAlign: 'right' }}>
                           S/ {((parseFloat(item.precio) || 0) * item.cantidad).toFixed(2)}
                         </p>
-                        <button onClick={() => setCarrito(prev => prev.filter(i => i.id !== item.id))}
+                        <button onClick={() => quitar(item.cartId)}
                           style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#D00', padding: '2px' }}>
                           <X size={13} />
                         </button>
@@ -379,10 +371,23 @@ export default function AdminVentas() {
                       <input type="date" value={fechaVenta} onChange={e => setFechaVenta(e.target.value)}
                         style={{ fontSize: 13, width: '100%' }} />
                     </div>
-                    <input value={nombreCliente} onChange={e => setNombreCliente(e.target.value)}
-                      placeholder="Nombre del cliente (opcional)" style={{ fontSize: 13 }} />
-                    <input value={notas} onChange={e => setNotas(e.target.value)}
-                      placeholder="Notas (opcional)" style={{ fontSize: 13 }} />
+                    
+                    {/* MODIFICADO: Toggle para mostrar las opciones de Cliente y Notas */}
+                    <button
+                      onClick={() => setMostrarOpcionesCliente(!mostrarOpcionesCliente)}
+                      style={{ background: 'none', border: 'none', color: 'var(--naranja)', fontSize: 12, cursor: 'pointer', textAlign: 'left', fontWeight: 600, marginTop: 4 }}>
+                      {mostrarOpcionesCliente ? '− Ocultar opciones de cliente' : '+ Agregar venta por cliente (Opcional)'}
+                    </button>
+
+                    {mostrarOpcionesCliente && (
+                      <>
+                        <input value={nombreCliente} onChange={e => setNombreCliente(e.target.value)}
+                          placeholder="Nombre del cliente (opcional)" style={{ fontSize: 13 }} />
+                        <input value={notas} onChange={e => setNotas(e.target.value)}
+                          placeholder="Notas (opcional)" style={{ fontSize: 13 }} />
+                      </>
+                    )}
+
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                     <span style={{ fontWeight: 700, fontSize: 15 }}>Total</span>
