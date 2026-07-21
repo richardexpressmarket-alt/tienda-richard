@@ -3,28 +3,27 @@ import { supabase } from '../../lib/supabase'
 import { 
   UploadCloud, FileText, CheckCircle, AlertCircle, 
   BarChart3, Calendar, Package, DollarSign,
-  ShoppingCart, RefreshCw, FileSpreadsheet, Printer
+  ShoppingCart, RefreshCw, Plus, Edit3
 } from 'lucide-react'
 import { exportarCSV } from '../../lib/exportar'
 import toast from 'react-hot-toast'
 
 // --------------------------------------------------------
-// NUEVO COMPONENTE: Buscador con autocompletado
+// COMPONENTE: Buscador con autocompletado
 // --------------------------------------------------------
 const BuscadorProductos = ({ item, productosDB, onSelect }) => {
   const prodVinculado = productosDB.find(p => p.id === item.producto_db_id)
   const [busqueda, setBusqueda] = useState(prodVinculado ? prodVinculado.nombre : '')
   const [mostrarOpciones, setMostrarOpciones] = useState(false)
 
-  // Sincronizar texto si la IA logra vincular automáticamente el producto
   useEffect(() => {
     if (item.producto_db_id) {
        const p = productosDB.find(x => x.id === item.producto_db_id)
        if (p) setBusqueda(p.nombre)
     } else {
-       setBusqueda('')
+       setBusqueda(item.nombreOriginal || '') // En modo manual toma el nombre temporal
     }
-  }, [item.producto_db_id, productosDB])
+  }, [item.producto_db_id, item.nombreOriginal, productosDB])
 
   const filtrados = productosDB.filter(p => 
     p.nombre.toLowerCase().includes(busqueda.toLowerCase())
@@ -39,21 +38,21 @@ const BuscadorProductos = ({ item, productosDB, onSelect }) => {
         onChange={e => {
           setBusqueda(e.target.value)
           setMostrarOpciones(true)
-          onSelect(null) // Desvincula temporalmente para evitar guardar un ID incorrecto
+          onSelect(null, e.target.value) 
         }}
         onFocus={() => setMostrarOpciones(true)}
         onBlur={() => setTimeout(() => setMostrarOpciones(false), 200)}
         style={{ width: '100%', fontSize: 13, padding: '6px 8px', border: '1px solid var(--borde)', borderRadius: 4 }}
       />
       
-      {mostrarOpciones && (
+      {mostrarOpciones && filtrados.length > 0 && (
         <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--fondo)', border: '1px solid var(--borde)', maxHeight: 150, overflowY: 'auto', zIndex: 10, borderRadius: 4, boxShadow: '0 4px 6px rgba(0,0,0,0.3)' }}>
-          {filtrados.length > 0 ? filtrados.map(p => (
+          {filtrados.map(p => (
             <div
               key={p.id}
               onClick={() => {
                 setBusqueda(p.nombre)
-                onSelect(p.id)
+                onSelect(p.id, p.nombre)
                 setMostrarOpciones(false)
               }}
               style={{ padding: '8px 10px', fontSize: 12, cursor: 'pointer', borderBottom: '1px solid var(--borde)' }}
@@ -63,9 +62,7 @@ const BuscadorProductos = ({ item, productosDB, onSelect }) => {
               <div style={{ fontWeight: 600 }}>{p.nombre}</div>
               <div style={{ fontSize: 10, color: 'var(--texto-suave)' }}>Stock actual: {p.stock} unid.</div>
             </div>
-          )) : (
-            <div style={{ padding: '8px 10px', fontSize: 12, color: 'var(--texto-suave)' }}>No se encontraron productos</div>
-          )}
+          ))}
         </div>
       )}
     </div>
@@ -80,12 +77,12 @@ export default function AdminCompras() {
   const [productosDB, setProductosDB] = useState([])
   const [comprasHistorial, setComprasHistorial] = useState([])
   
-  // Estados para Registro de PDF
+  // Estados para Registro (IA y Manual)
+  const [modoIngreso, setModoIngreso] = useState(null) // 'ia' o 'manual'
   const [pdfFile, setPdfFile] = useState(null)
   const [pdfUrl, setPdfUrl] = useState('')
   const [procesandoPdf, setProcesandoPdf] = useState(false)
   
-  // Datos Extraídos por Gemini IA
   const [datosFactura, setDatosFactura] = useState({
     proveedor: '', 
     ruc: '', 
@@ -129,6 +126,9 @@ export default function AdminCompras() {
     setCargando(false)
   }
 
+  // --------------------------------------------------------
+  // LÓGICA DE PROCESAMIENTO
+  // --------------------------------------------------------
   const convertirPdfABase64 = (file) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader()
@@ -145,33 +145,52 @@ export default function AdminCompras() {
       return toast.error('Se permiten archivos PDF o Imágenes')
     }
 
+    setModoIngreso('ia')
     setPdfFile(file)
     setPdfUrl(URL.createObjectURL(file))
     await procesarDocumentoConGemini(file)
+  }
+
+  const iniciarModoManual = () => {
+    setPdfFile(null)
+    setPdfUrl('')
+    setModoIngreso('manual')
+    setDatosFactura({
+      proveedor: '', ruc: '', numero_comprobante: '', fecha: new Date().toISOString().split('T')[0], 
+      subtotal: 0, igv: 0, otros_cargos: 0, total: 0, 
+      items: [{
+        id_temp: Date.now(), nombreOriginal: '', cantidad: 1, precio_total_linea: 0, producto_db_id: null, estado: 'pendiente'
+      }]
+    })
+  }
+
+  const resetearIngreso = () => {
+    setModoIngreso(null)
+    setPdfFile(null)
+    setPdfUrl('')
+    setDatosFactura({ proveedor: '', ruc: '', numero_comprobante: '', fecha: '', subtotal: 0, igv: 0, otros_cargos: 0, total: 0, items: [] })
   }
 
   const procesarDocumentoConGemini = async (file) => {
     setProcesandoPdf(true)
     try {
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY
-      
-      if (!apiKey) {
-        throw new Error('No se encontró VITE_GEMINI_API_KEY en las variables de entorno de Vercel.')
-      }
+      if (!apiKey) throw new Error('No se encontró VITE_GEMINI_API_KEY.')
 
       const base64Pdf = await convertirPdfABase64(file)
       const mimeType = file.type === 'application/pdf' ? 'application/pdf' : file.type
 
-      const prompt = `Analiza detenidamente este comprobante de compra (boleta o factura). 
+      // PROMPT MODIFICADO: Extrae precio_total_linea en vez de unitario
+      const prompt = `Analiza detenidamente este comprobante. 
       REGLAS MATEMÁTICAS ESTRICTAS:
-      1. Convierte SIEMPRE las docenas a unidades. Si la cantidad dice "1 DOC" o "1 DO", eso es igual a 12. Si dice "1 1/2 DO", eso es igual a 18. Anota solo el número final de unidades.
-      2. El "precio_unitario" debe ser matemáticamente exacto: divide el PRECIO TOTAL DE LA LÍNEA entre la CANTIDAD DE UNIDADES obtenidas.
+      1. Convierte SIEMPRE las docenas a unidades (Ej: "1 1/2 DO" = 18).
+      2. Extrae el PRECIO TOTAL PAGADO POR ESA LÍNEA DE PRODUCTOS y guárdalo en "precio_total_linea". (No extraigas el precio unitario, extrae la suma total de esa fila).
       
-      Extrae los datos y responde ÚNICAMENTE en formato JSON plano con la siguiente estructura exacta:
+      Extrae los datos y responde ÚNICAMENTE en formato JSON plano:
       {
-        "proveedor": "Nombre comercial o Razón Social",
-        "ruc": "Número de RUC del emisor",
-        "numero_comprobante": "Serie y correlativo (Ej: B003-0395158)",
+        "proveedor": "Nombre comercial",
+        "ruc": "RUC",
+        "numero_comprobante": "Serie y correlativo",
         "fecha": "YYYY-MM-DD",
         "subtotal": 0.00,
         "igv": 0.00,
@@ -179,9 +198,9 @@ export default function AdminCompras() {
         "total": 0.00,
         "items": [
           {
-            "nombreOriginal": "Descripción detallada del artículo",
+            "nombreOriginal": "Descripción detallada",
             "cantidad": 1,
-            "precio_unitario": 0.00
+            "precio_total_linea": 0.00
           }
         ]
       }`
@@ -191,61 +210,37 @@ export default function AdminCompras() {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [
-              {
-                parts: [
-                  { inline_data: { mime_type: mimeType, data: base64Pdf } },
-                  { text: prompt }
-                ]
-              }
-            ]
-          })
+          body: JSON.stringify({ contents: [{ parts: [{ inline_data: { mime_type: mimeType, data: base64Pdf } }, { text: prompt }] }] })
         }
       )
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error?.message || 'Error desconocido de Google')
-      }
+      if (!response.ok) throw new Error('Error en el servidor de IA')
 
       const data = await response.json()
-      const textoRespuesta = data.candidates?.[0]?.content?.parts?.[0]?.text
-
-      if (!textoRespuesta) throw new Error('No se pudo extraer texto del documento.')
-
-      const jsonLimpio = textoRespuesta.replace(/```json/g, '').replace(/```/g, '').trim()
+      const jsonLimpio = data.candidates?.[0]?.content?.parts?.[0]?.text.replace(/```json/g, '').replace(/```/g, '').trim()
       const resultado = JSON.parse(jsonLimpio)
 
       const itemsProcesados = (resultado.items || []).map(item => {
         const coincidencia = productosDB.find(p => 
-          p.nombre.toLowerCase().includes(item.nombreOriginal.toLowerCase()) ||
-          item.nombreOriginal.toLowerCase().includes(p.nombre.toLowerCase())
+          p.nombre.toLowerCase().includes(item.nombreOriginal.toLowerCase()) || item.nombreOriginal.toLowerCase().includes(p.nombre.toLowerCase())
         )
-
         return {
           id_temp: Date.now() + Math.random(),
           nombreOriginal: item.nombreOriginal,
           cantidad: Number(item.cantidad) || 1,
-          precio_unitario: Number(item.precio_unitario).toFixed(2) || 0,
+          precio_total_linea: Number(item.precio_total_linea) || 0,
           producto_db_id: coincidencia ? coincidencia.id : null,
           estado: coincidencia ? 'vinculado' : 'pendiente'
         }
       })
 
       setDatosFactura({
-        proveedor: resultado.proveedor || '',
-        ruc: resultado.ruc || '',
-        numero_comprobante: resultado.numero_comprobante || '',
-        fecha: resultado.fecha || new Date().toISOString().split('T')[0],
-        subtotal: Number(resultado.subtotal) || 0,
-        igv: Number(resultado.igv) || 0,
-        otros_cargos: Number(resultado.otros_cargos) || 0,
-        total: Number(resultado.total) || 0,
+        proveedor: resultado.proveedor || '', ruc: resultado.ruc || '', numero_comprobante: resultado.numero_comprobante || '',
+        fecha: resultado.fecha || new Date().toISOString().split('T')[0], subtotal: Number(resultado.subtotal) || 0,
+        igv: Number(resultado.igv) || 0, otros_cargos: Number(resultado.otros_cargos) || 0, total: Number(resultado.total) || 0,
         items: itemsProcesados
       })
-
-      toast.success('Documento procesado correctamente por IA')
+      toast.success('Documento procesado correctamente')
     } catch (error) {
       toast.error('Error al leer el PDF: ' + error.message)
     } finally {
@@ -253,11 +248,25 @@ export default function AdminCompras() {
     }
   }
 
-  const emparejarProducto = (idTemp, idDB) => {
+  // --------------------------------------------------------
+  // GESTIÓN DE ITEMS
+  // --------------------------------------------------------
+  const agregarFilaManual = () => {
+    setDatosFactura(prev => ({
+      ...prev,
+      items: [...prev.items, { id_temp: Date.now(), nombreOriginal: '', cantidad: 1, precio_total_linea: 0, producto_db_id: null, estado: 'pendiente' }]
+    }))
+  }
+
+  const quitarFila = (idTemp) => {
+    setDatosFactura(prev => ({ ...prev, items: prev.items.filter(i => i.id_temp !== idTemp) }))
+  }
+
+  const emparejarProducto = (idTemp, idDB, textoBuscador) => {
     setDatosFactura(prev => ({
       ...prev,
       items: prev.items.map(item => item.id_temp === idTemp 
-        ? { ...item, producto_db_id: idDB, estado: idDB ? 'vinculado' : 'pendiente' } 
+        ? { ...item, producto_db_id: idDB, nombreOriginal: textoBuscador || item.nombreOriginal, estado: idDB ? 'vinculado' : 'pendiente' } 
         : item
       )
     }))
@@ -275,43 +284,35 @@ export default function AdminCompras() {
   }
 
   const guardarCompra = async () => {
-    if (!datosFactura.proveedor || !datosFactura.ruc) return toast.error('Faltan datos del proveedor')
-    if (datosFactura.items.length === 0) return toast.error('No hay productos en la factura')
+    if (!datosFactura.proveedor) return toast.error('Falta el nombre del proveedor')
+    if (datosFactura.items.length === 0) return toast.error('No hay productos en el registro')
     
     const pendientes = datosFactura.items.filter(i => !i.producto_db_id)
-    if (pendientes.length > 0) {
-      return toast.error('Hay productos sin vincular al almacén. Asígnales un producto.')
-    }
+    if (pendientes.length > 0) return toast.error('Hay productos sin vincular al almacén. Asígnales un producto.')
 
     setCargando(true)
     try {
       const payloadCompra = {
         proveedor: datosFactura.proveedor,
-        ruc: datosFactura.ruc,
+        ruc: datosFactura.ruc || '00000000000',
         total: datosFactura.total,
-        fecha_compra: datosFactura.fecha
-        // La columna 'estado' fue removida para evitar el error del Schema Cache.
+        fecha_compra: datosFactura.fecha,
+        numero_comprobante: datosFactura.numero_comprobante || 'S/N'
       }
       
-      if (datosFactura.numero_comprobante) {
-        payloadCompra.numero_comprobante = datosFactura.numero_comprobante
-      }
-
-      const { data: compraData, error: errCompra } = await supabase
-        .from('compras')
-        .insert(payloadCompra)
-        .select()
-        .single()
-      
+      const { data: compraData, error: errCompra } = await supabase.from('compras').insert(payloadCompra).select().single()
       if (errCompra) throw errCompra
 
       for (const item of datosFactura.items) {
+        // Calculamos el precio unitario dinámicamente antes de guardar
+        const unitarioReal = Number(item.precio_total_linea) / (Number(item.cantidad) || 1)
+
         await supabase.from('compra_items').insert({
           compra_id: compraData.id,
           producto_id: item.producto_db_id,
           cantidad: item.cantidad,
-          precio_unitario: item.precio_unitario,
-          subtotal: item.cantidad * item.precio_unitario
+          precio_unitario: unitarioReal,
+          subtotal: item.precio_total_linea
         })
 
         const prodDB = productosDB.find(p => p.id === item.producto_db_id)
@@ -323,13 +324,10 @@ export default function AdminCompras() {
       }
 
       toast.success('Compra registrada y stock actualizado')
-      setPdfFile(null)
-      setPdfUrl('')
-      setDatosFactura({ proveedor: '', ruc: '', numero_comprobante: '', fecha: '', subtotal: 0, igv: 0, otros_cargos: 0, total: 0, items: [] })
+      resetearIngreso()
       cargarHistorial()
       cargarProductos()
       setTabActual('historial')
-
     } catch (error) {
       toast.error('Error al guardar: ' + error.message)
     } finally {
@@ -346,26 +344,19 @@ export default function AdminCompras() {
 
   comprasHistorial.forEach(compra => {
     gastoTotal += Number(compra.total || 0)
-    
     compra.compra_items?.forEach(item => {
       const cant = Number(item.cantidad || 0)
       productosComprados += cant
-
       const p = item.productos
       if (p) {
-        if (!productosStats[item.producto_id]) {
-          productosStats[item.producto_id] = { nombre: p.nombre, cantidad: 0, gasto: 0 }
-        }
+        if (!productosStats[item.producto_id]) productosStats[item.producto_id] = { nombre: p.nombre, cantidad: 0, gasto: 0 }
         productosStats[item.producto_id].cantidad += cant
         productosStats[item.producto_id].gasto += (cant * Number(item.precio_unitario))
       }
     })
   })
 
-  const fInicio = new Date(desde + 'T00:00:00')
-  const fFin = new Date(hasta + 'T23:59:59')
-  const diasTranscurridos = Math.max(1, Math.ceil((fFin - fInicio) / (1000 * 60 * 60 * 24)))
-  const promedioGastoDiario = gastoTotal / diasTranscurridos
+  const diasTranscurridos = Math.max(1, Math.ceil((new Date(hasta + 'T23:59:59') - new Date(desde + 'T00:00:00')) / (1000 * 60 * 60 * 24)))
   const topComprados = Object.values(productosStats).sort((a, b) => b.gasto - a.gasto)
 
   return (
@@ -377,7 +368,7 @@ export default function AdminCompras() {
         
         <div style={{ display: 'flex', background: 'var(--fondo)', padding: 4, borderRadius: 8, gap: 4 }}>
           <button onClick={() => setTabActual('registro')} className={tabActual === 'registro' ? 'btn-primary' : 'btn-ghost'} style={{ fontSize: 13, padding: '6px 12px' }}>
-            <UploadCloud size={16} /> Procesar Factura
+            <UploadCloud size={16} /> Registro
           </button>
           <button onClick={() => setTabActual('historial')} className={tabActual === 'historial' ? 'btn-primary' : 'btn-ghost'} style={{ fontSize: 13, padding: '6px 12px' }}>
             <FileText size={16} /> Historial
@@ -389,53 +380,59 @@ export default function AdminCompras() {
       </div>
 
       {tabActual === 'registro' && (
-        <div style={{ display: 'grid', gridTemplateColumns: pdfUrl ? '1fr 1fr' : '1fr', gap: 20, height: 'calc(100vh - 120px)' }}>
-          <div className="card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--borde)', background: 'var(--fondo)', display: 'flex', justifyContent: 'space-between' }}>
-              <h3 style={{ fontSize: 14, fontWeight: 700 }}>Comprobante en PDF / Imagen</h3>
-              {!pdfUrl && (
-                <label className="btn-primary" style={{ cursor: 'pointer', padding: '4px 12px', fontSize: 12 }}>
-                  <UploadCloud size={14} /> Subir Archivo
-                  <input type="file" accept="application/pdf,image/*" style={{ display: 'none' }} onChange={handleSubirPDF} />
-                </label>
-              )}
-              {pdfUrl && (
-                <button onClick={() => { setPdfFile(null); setPdfUrl(''); setDatosFactura({ items: [] }) }} className="btn-ghost" style={{ padding: '4px 12px', fontSize: 12, color: '#D00' }}>
-                  Quitar Documento
-                </button>
-              )}
-            </div>
-
-            <div style={{ flex: 1, background: '#525659', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-              {pdfUrl ? (
-                <iframe src={pdfUrl} width="100%" height="100%" style={{ border: 'none' }} title="Vista Previa" />
-              ) : (
-                <div style={{ textAlign: 'center', color: '#fff' }}>
-                  <FileText size={48} style={{ margin: '0 auto 16px', opacity: 0.5 }} />
-                  <p>Sube una factura o boleta para extraer sus datos automáticamente</p>
-                  <label className="btn-primary" style={{ cursor: 'pointer', padding: '8px 16px', marginTop: 16, display: 'inline-flex' }}>
-                    Seleccionar Archivo
-                    <input type="file" accept="application/pdf,image/*" style={{ display: 'none' }} onChange={handleSubirPDF} />
-                  </label>
+        <div style={{ display: 'grid', gridTemplateColumns: modoIngreso === 'ia' ? '1fr 1fr' : '1fr', gap: 20, minHeight: 'calc(100vh - 120px)' }}>
+          
+          {/* VISTA INICIAL DE SELECCIÓN */}
+          {!modoIngreso && (
+            <div style={{ display: 'flex', gap: 20, justifyContent: 'center', alignItems: 'center', flexDirection: 'column' }}>
+              <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16 }}>¿Cómo deseas registrar la compra?</h2>
+              <div style={{ display: 'flex', gap: 20 }}>
+                <div className="card" style={{ width: 300, textAlign: 'center', cursor: 'pointer', padding: 40 }} onClick={() => document.getElementById('file-upload').click()}>
+                   <UploadCloud size={48} style={{ margin: '0 auto 16px', color: 'var(--naranja)' }} />
+                   <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>Escanear Comprobante</h3>
+                   <p style={{ fontSize: 12, color: 'var(--texto-suave)' }}>Sube un PDF o foto y la Inteligencia Artificial extraerá los datos.</p>
+                   <input id="file-upload" type="file" accept="application/pdf,image/*" style={{ display: 'none' }} onChange={handleSubirPDF} />
                 </div>
-              )}
+                <div className="card" style={{ width: 300, textAlign: 'center', cursor: 'pointer', padding: 40 }} onClick={iniciarModoManual}>
+                   <Edit3 size={48} style={{ margin: '0 auto 16px', color: '#10b981' }} />
+                   <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>Ingreso Manual</h3>
+                   <p style={{ fontSize: 12, color: 'var(--texto-suave)' }}>No tengo comprobante o quiero ingresar los productos manualmente.</p>
+                </div>
+              </div>
             </div>
-          </div>
+          )}
 
-          {pdfUrl && (
-            <div className="card" style={{ padding: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-              <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--borde)', background: 'var(--fondo)' }}>
+          {/* VISOR DE PDF (Solo en Modo IA) */}
+          {modoIngreso === 'ia' && (
+            <div className="card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--borde)', background: 'var(--fondo)', display: 'flex', justifyContent: 'space-between' }}>
+                <h3 style={{ fontSize: 14, fontWeight: 700 }}>Documento Adjunto</h3>
+                <button onClick={resetearIngreso} className="btn-ghost" style={{ padding: '4px 12px', fontSize: 12, color: '#D00' }}>Cambiar/Quitar</button>
+              </div>
+              <div style={{ flex: 1, background: '#525659', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                <iframe src={pdfUrl} width="100%" height="100%" style={{ border: 'none' }} title="Vista Previa" />
+              </div>
+            </div>
+          )}
+
+          {/* FORMULARIO DE REGISTRO (Común para IA y Manual) */}
+          {modoIngreso && (
+            <div className="card" style={{ padding: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', margin: modoIngreso === 'manual' ? '0 auto' : 0, maxWidth: modoIngreso === 'manual' ? 700 : '100%', width: '100%' }}>
+              <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--borde)', background: 'var(--fondo)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h3 style={{ fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  Lector Inteligente (Gemini AI)
+                  {modoIngreso === 'ia' ? 'Datos Extraídos (Gemini AI)' : 'Formulario de Ingreso Manual'}
                   {procesandoPdf && <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />}
                 </h3>
+                {modoIngreso === 'manual' && (
+                  <button onClick={resetearIngreso} className="btn-ghost" style={{ padding: '4px 12px', fontSize: 12, color: '#D00' }}>Cancelar</button>
+                )}
               </div>
 
               <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
                 {procesandoPdf ? (
                   <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--texto-suave)' }}>
                     <RefreshCw size={32} className="spin" style={{ margin: '0 auto 16px', color: 'var(--naranja)' }} />
-                    <p>Calculando unidades exactas y desglosando impuestos...</p>
+                    <p>Analizando comprobante y calculando valores...</p>
                   </div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -454,25 +451,38 @@ export default function AdminCompras() {
                       </div>
                       <div style={{ gridColumn: '1 / -1' }}>
                         <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--texto-suave)' }}>N° Boleta/Factura</label>
-                        <input type="text" value={datosFactura.numero_comprobante} onChange={e => cambiarDatoFactura('numero_comprobante', e.target.value)} placeholder="Ej: B001-000234" style={{ width: '100%', fontSize: 13 }} />
+                        <input type="text" value={datosFactura.numero_comprobante} onChange={e => cambiarDatoFactura('numero_comprobante', e.target.value)} placeholder="Ej: B001-000234 (Dejar vacío si no aplica)" style={{ width: '100%', fontSize: 13 }} />
                       </div>
                     </div>
 
                     <hr style={{ border: 'none', borderTop: '1px dashed var(--borde)' }} />
 
                     <div>
-                      <h4 style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Relación con Almacén</h4>
-                      {datosFactura.items.map((item) => (
-                        <div key={item.id_temp} style={{ padding: 12, border: `1px solid ${item.estado === 'vinculado' ? '#10b981' : '#f59e0b'}`, borderRadius: 8, marginBottom: 12, background: item.estado === 'vinculado' ? '#10b98108' : '#f59e0b08' }}>
-                          <p style={{ fontSize: 11, color: 'var(--texto-suave)', marginBottom: 4 }}>Descripción PDF: <b>{item.nombreOriginal}</b></p>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                        <h4 style={{ fontSize: 13, fontWeight: 700 }}>Relación con Almacén</h4>
+                        {modoIngreso === 'manual' && (
+                          <button onClick={agregarFilaManual} className="btn-ghost" style={{ fontSize: 11, padding: '4px 8px', color: '#10b981' }}>
+                            <Plus size={14} /> Agregar Fila
+                          </button>
+                        )}
+                      </div>
+                      
+                      {datosFactura.items.map((item) => {
+                        // CÁLCULO MATEMÁTICO EN VIVO (Read-Only)
+                        const unitarioDerivado = (Number(item.precio_total_linea) / (Number(item.cantidad) || 1)).toFixed(4)
+
+                        return (
+                        <div key={item.id_temp} style={{ padding: 12, border: `1px solid ${item.estado === 'vinculado' ? '#10b981' : '#f59e0b'}`, borderRadius: 8, marginBottom: 12, background: item.estado === 'vinculado' ? '#10b98108' : '#f59e0b08', position: 'relative' }}>
+                          {modoIngreso === 'manual' && datosFactura.items.length > 1 && (
+                            <button onClick={() => quitarFila(item.id_temp)} style={{ position: 'absolute', top: 8, right: 8, background: 'none', border: 'none', color: '#D00', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>X</button>
+                          )}
                           
-                          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-                            {/* AQUÍ SE INTEGRA EL NUEVO BUSCADOR INTELIGENTE */}
-                            <BuscadorProductos 
-                              item={item} 
-                              productosDB={productosDB} 
-                              onSelect={(id) => emparejarProducto(item.id_temp, id)} 
-                            />
+                          {modoIngreso === 'ia' && (
+                            <p style={{ fontSize: 11, color: 'var(--texto-suave)', marginBottom: 4 }}>Descripción PDF: <b>{item.nombreOriginal}</b></p>
+                          )}
+                          
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8, marginTop: modoIngreso === 'manual' ? 12 : 0 }}>
+                            <BuscadorProductos item={item} productosDB={productosDB} onSelect={(id, texto) => emparejarProducto(item.id_temp, id, texto)} />
                             
                             {item.estado === 'vinculado' ? (
                               <CheckCircle size={20} color="#10b981" style={{ minWidth: 20 }} />
@@ -489,12 +499,18 @@ export default function AdminCompras() {
                               <input type="number" value={item.cantidad} onChange={e => cambiarDatoItem(item.id_temp, 'cantidad', e.target.value)} style={{ width: '100%', fontSize: 12, padding: '4px 8px' }} />
                             </div>
                             <div style={{ flex: 1 }}>
-                              <label style={{ fontSize: 10 }}>Costo Unitario (S/)</label>
-                              <input type="number" step="any" value={item.precio_unitario} onChange={e => cambiarDatoItem(item.id_temp, 'precio_unitario', e.target.value)} style={{ width: '100%', fontSize: 12, padding: '4px 8px' }} />
+                              <label style={{ fontSize: 10, fontWeight: 700, color: '#D00' }}>Total Pagado (S/)</label>
+                              <input type="number" step="any" value={item.precio_total_linea} onChange={e => cambiarDatoItem(item.id_temp, 'precio_total_linea', e.target.value)} style={{ width: '100%', fontSize: 12, padding: '4px 8px', border: '1px solid #D00' }} />
                             </div>
                           </div>
+                          
+                          <div style={{ marginTop: 8, textAlign: 'right' }}>
+                            <span style={{ fontSize: 11, background: 'var(--fondo)', padding: '2px 8px', borderRadius: 4, color: 'var(--texto-suave)', border: '1px solid var(--borde)' }}>
+                              Precio Unitario Calculado: <b style={{ color: 'var(--texto)' }}>S/ {unitarioDerivado}</b>
+                            </span>
+                          </div>
                         </div>
-                      ))}
+                      )})}
                     </div>
 
                     <hr style={{ border: 'none', borderTop: '1px dashed var(--borde)' }} />
@@ -540,7 +556,9 @@ export default function AdminCompras() {
         </div>
       )}
 
-      {/* TAB 2: HISTORIAL */}
+      {/* TABS DE HISTORIAL Y ANÁLISIS PERMANECEN IGUAL... */}
+      {/* (Todo el código inferior del Historial y Análisis es exactamente el mismo que ya tenías) */}
+      
       {tabActual === 'historial' && (
         <div>
           <div className="card" style={{ padding: '16px 20px', marginBottom: 20 }}>
@@ -582,7 +600,6 @@ export default function AdminCompras() {
         </div>
       )}
 
-      {/* TAB 3: ANÁLISIS */}
       {tabActual === 'analisis' && (
         <div className="analisis-container">
           <div className="card" style={{ padding: '16px 20px', marginBottom: 20 }}>
@@ -638,7 +655,7 @@ export default function AdminCompras() {
                           <p style={{ fontSize: 13, fontWeight: 600 }}>{p.nombre}</p>
                           <div style={{ display: 'flex', gap: 12, marginTop: 2 }}>
                             <p style={{ fontSize: 11, color: 'var(--texto-suave)' }}>Unidades: {p.cantidad}</p>
-                            <p style={{ fontSize: 11, color: 'var(--texto-suave)' }}>Costo Promedio: S/ {costoPromedio.toFixed(2)}</p>
+                            <p style={{ fontSize: 11, color: 'var(--texto-suave)' }}>Costo Promedio: S/ {costoPromedio.toFixed(4)}</p>
                           </div>
                         </div>
                       </div>
