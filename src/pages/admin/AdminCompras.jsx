@@ -9,7 +9,7 @@ import { exportarCSV } from '../../lib/exportar'
 import toast from 'react-hot-toast'
 
 export default function AdminCompras() {
-  const [tabActual, setTabActual] = useState('registro') // 'registro', 'historial', 'analisis'
+  const [tabActual, setTabActual] = useState('registro')
   const [cargando, setCargando] = useState(false)
   
   // Datos Globales
@@ -23,11 +23,7 @@ export default function AdminCompras() {
   
   // Datos Extraídos por Gemini IA
   const [datosFactura, setDatosFactura] = useState({
-    proveedor: '',
-    ruc: '',
-    fecha: new Date().toISOString().split('T')[0],
-    total: 0,
-    items: []
+    proveedor: '', ruc: '', fecha: new Date().toISOString().split('T')[0], total: 0, items: []
   })
 
   // Filtros de Fecha
@@ -87,8 +83,13 @@ export default function AdminCompras() {
     setProcesandoPdf(true)
     try {
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+      
+      // Validación estricta de la API Key
       if (!apiKey) {
         throw new Error('No se encontró VITE_GEMINI_API_KEY en las variables de entorno de Vercel.')
+      }
+      if (!apiKey.startsWith('AIza')) {
+        throw new Error('CLAVE INVÁLIDA: Las claves de Google siempre deben empezar con "AIza". Revisa lo que pegaste en Vercel.')
       }
 
       const base64Pdf = await convertirPdfABase64(file)
@@ -108,8 +109,9 @@ export default function AdminCompras() {
         ]
       }`
 
+      // Usando el endpoint oficial v1 (más estable) con el modelo flash
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`,
+        `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -128,7 +130,22 @@ export default function AdminCompras() {
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.error?.message || 'Respuesta fallida de Gemini')
+        const errorMsg = errorData.error?.message || 'Error desconocido de Google'
+        
+        // Autodiagnóstico en caso de fallo de modelo
+        if (errorMsg.includes('not found') || errorMsg.includes('not supported')) {
+          try {
+            const diagRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`)
+            if (diagRes.ok) {
+              const listData = await diagRes.json()
+              const modelos = listData.models.map(m => m.name.replace('models/', '')).filter(m => m.includes('1.5')).join(', ')
+              throw new Error(`Modelo no soportado por tu cuenta. Modelos disponibles para ti: ${modelos}`)
+            }
+          } catch (diagErr) {
+            // Falla silenciosa del diagnóstico
+          }
+        }
+        throw new Error(errorMsg)
       }
 
       const data = await response.json()
@@ -136,11 +153,9 @@ export default function AdminCompras() {
 
       if (!textoRespuesta) throw new Error('No se pudo extraer texto del PDF.')
 
-      // Limpiar markdown del JSON
       const jsonLimpio = textoRespuesta.replace(/```json/g, '').replace(/```/g, '').trim()
       const resultado = JSON.parse(jsonLimpio)
 
-      // Emparejamiento automático con productos existentes en la base de datos
       const itemsProcesados = (resultado.items || []).map(item => {
         const coincidencia = productosDB.find(p => 
           p.nombre.toLowerCase().includes(item.nombreOriginal.toLowerCase()) ||
@@ -302,10 +317,8 @@ export default function AdminCompras() {
         </div>
       </div>
 
-      {/* TAB 1: REGISTRO CON IA */}
       {tabActual === 'registro' && (
         <div style={{ display: 'grid', gridTemplateColumns: pdfUrl ? '1fr 1fr' : '1fr', gap: 20, height: 'calc(100vh - 120px)' }}>
-          
           <div className="card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--borde)', background: 'var(--fondo)', display: 'flex', justifyContent: 'space-between' }}>
               <h3 style={{ fontSize: 14, fontWeight: 700 }}>Comprobante en PDF</h3>
@@ -547,7 +560,6 @@ export default function AdminCompras() {
           </div>
         </div>
       )}
-
     </div>
   )
 }
