@@ -88,9 +88,6 @@ export default function AdminCompras() {
       if (!apiKey) {
         throw new Error('No se encontró VITE_GEMINI_API_KEY en las variables de entorno de Vercel.')
       }
-      if (!apiKey.startsWith('AIza')) {
-        throw new Error('CLAVE INVÁLIDA: Las claves de Google siempre deben empezar con "AIza". Revisa lo que pegaste en Vercel.')
-      }
 
       const base64Pdf = await convertirPdfABase64(file)
 
