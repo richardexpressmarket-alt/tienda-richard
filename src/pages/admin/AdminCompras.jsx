@@ -8,6 +8,70 @@ import {
 import { exportarCSV } from '../../lib/exportar'
 import toast from 'react-hot-toast'
 
+// --------------------------------------------------------
+// NUEVO COMPONENTE: Buscador con autocompletado
+// --------------------------------------------------------
+const BuscadorProductos = ({ item, productosDB, onSelect }) => {
+  const prodVinculado = productosDB.find(p => p.id === item.producto_db_id)
+  const [busqueda, setBusqueda] = useState(prodVinculado ? prodVinculado.nombre : '')
+  const [mostrarOpciones, setMostrarOpciones] = useState(false)
+
+  // Sincronizar texto si la IA logra vincular automáticamente el producto
+  useEffect(() => {
+    if (item.producto_db_id) {
+       const p = productosDB.find(x => x.id === item.producto_db_id)
+       if (p) setBusqueda(p.nombre)
+    } else {
+       setBusqueda('')
+    }
+  }, [item.producto_db_id, productosDB])
+
+  const filtrados = productosDB.filter(p => 
+    p.nombre.toLowerCase().includes(busqueda.toLowerCase())
+  )
+
+  return (
+    <div style={{ flex: 1, position: 'relative' }}>
+      <input
+        type="text"
+        placeholder="🔍 Buscar producto en almacén..."
+        value={busqueda}
+        onChange={e => {
+          setBusqueda(e.target.value)
+          setMostrarOpciones(true)
+          onSelect(null) // Desvincula temporalmente para evitar guardar un ID incorrecto
+        }}
+        onFocus={() => setMostrarOpciones(true)}
+        onBlur={() => setTimeout(() => setMostrarOpciones(false), 200)}
+        style={{ width: '100%', fontSize: 13, padding: '6px 8px', border: '1px solid var(--borde)', borderRadius: 4 }}
+      />
+      
+      {mostrarOpciones && (
+        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--fondo)', border: '1px solid var(--borde)', maxHeight: 150, overflowY: 'auto', zIndex: 10, borderRadius: 4, boxShadow: '0 4px 6px rgba(0,0,0,0.3)' }}>
+          {filtrados.length > 0 ? filtrados.map(p => (
+            <div
+              key={p.id}
+              onClick={() => {
+                setBusqueda(p.nombre)
+                onSelect(p.id)
+                setMostrarOpciones(false)
+              }}
+              style={{ padding: '8px 10px', fontSize: 12, cursor: 'pointer', borderBottom: '1px solid var(--borde)' }}
+              onMouseEnter={(e) => e.target.style.background = '#f59e0b22'}
+              onMouseLeave={(e) => e.target.style.background = 'transparent'}
+            >
+              <div style={{ fontWeight: 600 }}>{p.nombre}</div>
+              <div style={{ fontSize: 10, color: 'var(--texto-suave)' }}>Stock actual: {p.stock} unid.</div>
+            </div>
+          )) : (
+            <div style={{ padding: '8px 10px', fontSize: 12, color: 'var(--texto-suave)' }}>No se encontraron productos</div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function AdminCompras() {
   const [tabActual, setTabActual] = useState('registro')
   const [cargando, setCargando] = useState(false)
@@ -21,7 +85,7 @@ export default function AdminCompras() {
   const [pdfUrl, setPdfUrl] = useState('')
   const [procesandoPdf, setProcesandoPdf] = useState(false)
   
-  // Datos Extraídos por Gemini IA (NUEVOS CAMPOS AGREGADOS)
+  // Datos Extraídos por Gemini IA
   const [datosFactura, setDatosFactura] = useState({
     proveedor: '', 
     ruc: '', 
@@ -98,11 +162,10 @@ export default function AdminCompras() {
       const base64Pdf = await convertirPdfABase64(file)
       const mimeType = file.type === 'application/pdf' ? 'application/pdf' : file.type
 
-      // PROMPT OPTIMIZADO: Matemáticas, conversiones y campos adicionales
       const prompt = `Analiza detenidamente este comprobante de compra (boleta o factura). 
       REGLAS MATEMÁTICAS ESTRICTAS:
       1. Convierte SIEMPRE las docenas a unidades. Si la cantidad dice "1 DOC" o "1 DO", eso es igual a 12. Si dice "1 1/2 DO", eso es igual a 18. Anota solo el número final de unidades.
-      2. El "precio_unitario" debe ser matemáticamente exacto: divide el PRECIO TOTAL DE LA LÍNEA entre la CANTIDAD DE UNIDADES obtenidas. (Ej: Si 18 unidades cuestan 28.90, el precio unitario es 1.61).
+      2. El "precio_unitario" debe ser matemáticamente exacto: divide el PRECIO TOTAL DE LA LÍNEA entre la CANTIDAD DE UNIDADES obtenidas.
       
       Extrae los datos y responde ÚNICAMENTE en formato JSON plano con la siguiente estructura exacta:
       {
@@ -170,7 +233,6 @@ export default function AdminCompras() {
         }
       })
 
-      // Actualizando estado con los nuevos campos
       setDatosFactura({
         proveedor: resultado.proveedor || '',
         ruc: resultado.ruc || '',
@@ -223,17 +285,14 @@ export default function AdminCompras() {
 
     setCargando(true)
     try {
-      // Nota: Asegúrate de que tu tabla 'compras' en Supabase tenga la columna 'numero_comprobante'
-      // Si no la tiene, creará la compra sin problemas, pero no guardará ese campo extra hasta que lo agregues.
       const payloadCompra = {
         proveedor: datosFactura.proveedor,
         ruc: datosFactura.ruc,
         total: datosFactura.total,
-        fecha_compra: datosFactura.fecha,
-        estado: 'completada'
+        fecha_compra: datosFactura.fecha
+        // La columna 'estado' fue removida para evitar el error del Schema Cache.
       }
       
-      // Intentamos agregar el número de comprobante si la DB lo soporta (Opcional, no romperá si no está)
       if (datosFactura.numero_comprobante) {
         payloadCompra.numero_comprobante = datosFactura.numero_comprobante
       }
@@ -408,19 +467,15 @@ export default function AdminCompras() {
                           <p style={{ fontSize: 11, color: 'var(--texto-suave)', marginBottom: 4 }}>Descripción PDF: <b>{item.nombreOriginal}</b></p>
                           
                           <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-                            <select 
-                              value={item.producto_db_id || ''} 
-                              onChange={(e) => emparejarProducto(item.id_temp, e.target.value)}
-                              style={{ flex: 1, fontSize: 13, padding: '6px 8px', border: '1px solid var(--borde)', borderRadius: 4 }}
-                            >
-                              <option value="">-- Seleccionar producto de tu Almacén --</option>
-                              {productosDB.map(p => (
-                                <option key={p.id} value={p.id}>{p.nombre} (Stock actual: {p.stock})</option>
-                              ))}
-                            </select>
+                            {/* AQUÍ SE INTEGRA EL NUEVO BUSCADOR INTELIGENTE */}
+                            <BuscadorProductos 
+                              item={item} 
+                              productosDB={productosDB} 
+                              onSelect={(id) => emparejarProducto(item.id_temp, id)} 
+                            />
                             
                             {item.estado === 'vinculado' ? (
-                              <CheckCircle size={20} color="#10b981" />
+                              <CheckCircle size={20} color="#10b981" style={{ minWidth: 20 }} />
                             ) : (
                               <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#f59e0b', fontSize: 11, fontWeight: 600 }}>
                                 <AlertCircle size={18} /> PENDIENTE
@@ -573,7 +628,6 @@ export default function AdminCompras() {
               ) : (
                 topComprados.slice(0, 10).map((p, idx) => {
                   const costoPromedio = p.gasto / p.cantidad;
-                  // Fórmula: Costo * 1.30 (Asegura recuperar costo de compra + IGV inherente y añade 30% limpio)
                   const precioSugeridoVenta = costoPromedio * 1.30; 
                   
                   return (
