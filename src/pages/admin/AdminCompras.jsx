@@ -21,7 +21,7 @@ const BuscadorProductos = ({ item, productosDB, onSelect }) => {
        const p = productosDB.find(x => x.id === item.producto_db_id)
        if (p) setBusqueda(p.nombre)
     } else {
-       setBusqueda(item.nombreOriginal || '') // En modo manual toma el nombre temporal
+       setBusqueda(item.nombreOriginal || '') 
     }
   }, [item.producto_db_id, item.nombreOriginal, productosDB])
 
@@ -78,7 +78,7 @@ export default function AdminCompras() {
   const [comprasHistorial, setComprasHistorial] = useState([])
   
   // Estados para Registro (IA y Manual)
-  const [modoIngreso, setModoIngreso] = useState(null) // 'ia' o 'manual'
+  const [modoIngreso, setModoIngreso] = useState(null) 
   const [pdfFile, setPdfFile] = useState(null)
   const [pdfUrl, setPdfUrl] = useState('')
   const [procesandoPdf, setProcesandoPdf] = useState(false)
@@ -180,7 +180,6 @@ export default function AdminCompras() {
       const base64Pdf = await convertirPdfABase64(file)
       const mimeType = file.type === 'application/pdf' ? 'application/pdf' : file.type
 
-      // PROMPT MODIFICADO: Extrae precio_total_linea en vez de unitario
       const prompt = `Analiza detenidamente este comprobante. 
       REGLAS MATEMÁTICAS ESTRICTAS:
       1. Convierte SIEMPRE las docenas a unidades (Ej: "1 1/2 DO" = 18).
@@ -292,8 +291,9 @@ export default function AdminCompras() {
 
     setCargando(true)
     try {
+      // AQUÍ ESTÁ EL ARREGLO: Mapeamos datosFactura.proveedor a la columna "empresa" de tu DB
       const payloadCompra = {
-        proveedor: datosFactura.proveedor,
+        empresa: datosFactura.proveedor, 
         ruc: datosFactura.ruc || '00000000000',
         total: datosFactura.total,
         fecha_compra: datosFactura.fecha,
@@ -304,7 +304,6 @@ export default function AdminCompras() {
       if (errCompra) throw errCompra
 
       for (const item of datosFactura.items) {
-        // Calculamos el precio unitario dinámicamente antes de guardar
         const unitarioReal = Number(item.precio_total_linea) / (Number(item.cantidad) || 1)
 
         await supabase.from('compra_items').insert({
@@ -357,6 +356,7 @@ export default function AdminCompras() {
   })
 
   const diasTranscurridos = Math.max(1, Math.ceil((new Date(hasta + 'T23:59:59') - new Date(desde + 'T00:00:00')) / (1000 * 60 * 60 * 24)))
+  const promedioGastoDiario = gastoTotal / diasTranscurridos
   const topComprados = Object.values(productosStats).sort((a, b) => b.gasto - a.gasto)
 
   return (
@@ -382,7 +382,6 @@ export default function AdminCompras() {
       {tabActual === 'registro' && (
         <div style={{ display: 'grid', gridTemplateColumns: modoIngreso === 'ia' ? '1fr 1fr' : '1fr', gap: 20, minHeight: 'calc(100vh - 120px)' }}>
           
-          {/* VISTA INICIAL DE SELECCIÓN */}
           {!modoIngreso && (
             <div style={{ display: 'flex', gap: 20, justifyContent: 'center', alignItems: 'center', flexDirection: 'column' }}>
               <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16 }}>¿Cómo deseas registrar la compra?</h2>
@@ -402,7 +401,6 @@ export default function AdminCompras() {
             </div>
           )}
 
-          {/* VISOR DE PDF (Solo en Modo IA) */}
           {modoIngreso === 'ia' && (
             <div className="card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
               <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--borde)', background: 'var(--fondo)', display: 'flex', justifyContent: 'space-between' }}>
@@ -415,7 +413,6 @@ export default function AdminCompras() {
             </div>
           )}
 
-          {/* FORMULARIO DE REGISTRO (Común para IA y Manual) */}
           {modoIngreso && (
             <div className="card" style={{ padding: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', margin: modoIngreso === 'manual' ? '0 auto' : 0, maxWidth: modoIngreso === 'manual' ? 700 : '100%', width: '100%' }}>
               <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--borde)', background: 'var(--fondo)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -446,7 +443,7 @@ export default function AdminCompras() {
                         <input type="date" value={datosFactura.fecha} onChange={e => cambiarDatoFactura('fecha', e.target.value)} style={{ width: '100%', fontSize: 13 }} />
                       </div>
                       <div style={{ gridColumn: '1 / -1' }}>
-                        <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--texto-suave)' }}>Proveedor</label>
+                        <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--texto-suave)' }}>Proveedor / Empresa</label>
                         <input type="text" value={datosFactura.proveedor} onChange={e => cambiarDatoFactura('proveedor', e.target.value)} style={{ width: '100%', fontSize: 13 }} />
                       </div>
                       <div style={{ gridColumn: '1 / -1' }}>
@@ -468,7 +465,6 @@ export default function AdminCompras() {
                       </div>
                       
                       {datosFactura.items.map((item) => {
-                        // CÁLCULO MATEMÁTICO EN VIVO (Read-Only)
                         const unitarioDerivado = (Number(item.precio_total_linea) / (Number(item.cantidad) || 1)).toFixed(4)
 
                         return (
@@ -556,9 +552,6 @@ export default function AdminCompras() {
         </div>
       )}
 
-      {/* TABS DE HISTORIAL Y ANÁLISIS PERMANECEN IGUAL... */}
-      {/* (Todo el código inferior del Historial y Análisis es exactamente el mismo que ya tenías) */}
-      
       {tabActual === 'historial' && (
         <div>
           <div className="card" style={{ padding: '16px 20px', marginBottom: 20 }}>
@@ -582,7 +575,8 @@ export default function AdminCompras() {
               comprasHistorial.map(compra => (
                 <div key={compra.id} className="card" style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
-                    <h3 style={{ fontSize: 14, fontWeight: 700 }}>{compra.proveedor}</h3>
+                    {/* AQUÍ TAMBIÉN SE CORRIGIÓ PARA LEER LA COLUMNA empresa */}
+                    <h3 style={{ fontSize: 14, fontWeight: 700 }}>{compra.empresa}</h3>
                     <p style={{ fontSize: 11, color: 'var(--texto-suave)' }}>RUC: {compra.ruc} | Fecha: {compra.fecha_compra}</p>
                     <p style={{ fontSize: 12, marginTop: 4 }}>
                       <Package size={12} style={{ display: 'inline', marginRight: 4 }} />
