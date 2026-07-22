@@ -1,15 +1,27 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { 
   UploadCloud, FileText, CheckCircle, AlertCircle, 
   BarChart3, Calendar, Package, ShoppingCart, RefreshCw, 
-  Plus, Edit3, Search, ExternalLink, Receipt
+  Plus, Edit3, Search, ExternalLink, Receipt, Printer, EyeOff, Eye
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'
 
 // --------------------------------------------------------
-// COMPONENTE: Buscador con autocompletado
+// ESTILOS PARA IMPRESIÓN (Oculta el resto de la web al imprimir)
+// --------------------------------------------------------
+const estilosImpresion = `
+  @media print {
+    body * { visibility: hidden; }
+    #zona-impresion, #zona-impresion * { visibility: visible; }
+    #zona-impresion { position: absolute; left: 0; top: 0; width: 100%; padding: 20px; }
+    .no-print { display: none !important; }
+  }
+`;
+
+// --------------------------------------------------------
+// COMPONENTE: Buscador con autocompletado (No borra el original)
 // --------------------------------------------------------
 const BuscadorProductos = ({ item, productosDB, onSelect }) => {
   const prodVinculado = productosDB.find(p => p.id === item.producto_db_id)
@@ -20,10 +32,8 @@ const BuscadorProductos = ({ item, productosDB, onSelect }) => {
     if (item.producto_db_id) {
        const p = productosDB.find(x => x.id === item.producto_db_id)
        if (p) setBusqueda(p.nombre)
-    } else {
-       setBusqueda(item.nombreOriginal || '') 
     }
-  }, [item.producto_db_id, item.nombreOriginal, productosDB])
+  }, [item.producto_db_id, productosDB])
 
   const filtrados = productosDB.filter(p => p.nombre.toLowerCase().includes(busqueda.toLowerCase()))
 
@@ -31,25 +41,25 @@ const BuscadorProductos = ({ item, productosDB, onSelect }) => {
     <div style={{ flex: 1, position: 'relative' }}>
       <input
         type="text"
-        placeholder="🔍 Buscar producto en almacén..."
+        placeholder="🔍 Vincular con producto de almacén..."
         value={busqueda}
-        onChange={e => { setBusqueda(e.target.value); setMostrarOpciones(true); onSelect(null, e.target.value) }}
+        onChange={e => { setBusqueda(e.target.value); setMostrarOpciones(true); onSelect(null) }}
         onFocus={() => setMostrarOpciones(true)}
         onBlur={() => setTimeout(() => setMostrarOpciones(false), 200)}
-        style={{ width: '100%', fontSize: 13, padding: '6px 8px', border: '1px solid var(--borde)', borderRadius: 4 }}
+        style={{ width: '100%', fontSize: 13, padding: '6px 8px', border: '1px solid #3b82f655', borderRadius: 4, background: '#3b82f605' }}
       />
       {mostrarOpciones && filtrados.length > 0 && (
         <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--fondo)', border: '1px solid var(--borde)', maxHeight: 150, overflowY: 'auto', zIndex: 10, borderRadius: 4, boxShadow: '0 4px 6px rgba(0,0,0,0.3)' }}>
           {filtrados.map(p => (
             <div
               key={p.id}
-              onClick={() => { setBusqueda(p.nombre); onSelect(p.id, p.nombre); setMostrarOpciones(false) }}
+              onClick={() => { setBusqueda(p.nombre); onSelect(p.id); setMostrarOpciones(false) }}
               style={{ padding: '8px 10px', fontSize: 12, cursor: 'pointer', borderBottom: '1px solid var(--borde)' }}
               onMouseEnter={(e) => e.target.style.background = '#f59e0b22'}
               onMouseLeave={(e) => e.target.style.background = 'transparent'}
             >
               <div style={{ fontWeight: 600 }}>{p.nombre}</div>
-              <div style={{ fontSize: 10, color: 'var(--texto-suave)' }}>Stock actual: {p.stock} unid.</div>
+              <div style={{ fontSize: 10, color: 'var(--texto-suave)' }}>Stock: {p.stock} unid.</div>
             </div>
           ))}
         </div>
@@ -68,7 +78,6 @@ export default function AdminCompras() {
   
   // Estados Registro
   const [modoIngreso, setModoIngreso] = useState(null) 
-  const [pdfFile, setPdfFile] = useState(null)
   const [pdfUrl, setPdfUrl] = useState('')
   const [procesandoPdf, setProcesandoPdf] = useState(false)
   
@@ -80,16 +89,38 @@ export default function AdminCompras() {
   // Estados Historial
   const [busquedaHistorial, setBusquedaHistorial] = useState('')
   const [compraExpandida, setCompraExpandida] = useState(null)
+  const [ocultarAlmacen, setOcultarAlmacen] = useState(false) // Toggle para impresión
 
   // Estados Análisis
   const [busquedaAnalisis, setBusquedaAnalisis] = useState('')
-
   const [desde, setDesde] = useState(() => {
     const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split('T')[0]
   })
   const [hasta, setHasta] = useState(() => {
     const d = new Date(); return new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0]
   })
+
+  // --------------------------------------------------------
+  // AUTO-GUARDADO (Recuperar Borrador)
+  // --------------------------------------------------------
+  useEffect(() => {
+    const borrador = localStorage.getItem('borradorCompras')
+    if (borrador) {
+      try {
+        const guardado = JSON.parse(borrador)
+        if (guardado.modoIngreso) setModoIngreso(guardado.modoIngreso)
+        if (guardado.datosFactura) setDatosFactura(guardado.datosFactura)
+      } catch (e) { console.error('Error cargando borrador') }
+    }
+  }, [])
+
+  // Guardar en localStorage cada vez que haya un cambio
+  useEffect(() => {
+    if (modoIngreso) {
+      localStorage.setItem('borradorCompras', JSON.stringify({ modoIngreso, datosFactura }))
+    }
+  }, [datosFactura, modoIngreso])
+
 
   useEffect(() => {
     cargarProductos()
@@ -127,13 +158,12 @@ export default function AdminCompras() {
     const file = e.target.files[0]
     if (!file) return
     setModoIngreso('ia')
-    setPdfFile(file)
     setPdfUrl(URL.createObjectURL(file))
     await procesarDocumentoConGemini(file)
   }
 
   const iniciarModoManual = () => {
-    setPdfFile(null); setPdfUrl(''); setModoIngreso('manual')
+    setPdfUrl(''); setModoIngreso('manual')
     setDatosFactura({
       proveedor: '', ruc: '', numero_comprobante: '', fecha: new Date().toISOString().split('T')[0], 
       subtotal: 0, igv: 0, otros_cargos: 0, total: 0, enlace_drive: '',
@@ -142,20 +172,20 @@ export default function AdminCompras() {
   }
 
   const resetearIngreso = () => {
-    setModoIngreso(null); setPdfFile(null); setPdfUrl('')
-    setDatosFactura({ proveedor: '', ruc: '', numero_comprobante: '', fecha: '', subtotal: 0, igv: 0, otros_cargos: 0, total: 0, enlace_drive: '', items: [] })
+    setModoIngreso(null); setPdfUrl(''); localStorage.removeItem('borradorCompras')
+    setDatosFactura({ proveedor: '', ruc: '', numero_comprobante: '', fecha: new Date().toISOString().split('T')[0], subtotal: 0, igv: 0, otros_cargos: 0, total: 0, enlace_drive: '', items: [] })
   }
 
   const procesarDocumentoConGemini = async (file) => {
     setProcesandoPdf(true)
     try {
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY
-      if (!apiKey) throw new Error('No API Key')
+      if (!apiKey) throw new Error('No API Key configurada')
 
       const base64Pdf = await convertirPdfABase64(file)
       const mimeType = file.type === 'application/pdf' ? 'application/pdf' : file.type
 
-      const prompt = `Analiza detenidamente este comprobante. REGLAS: 1. Convierte docenas a unidades ("1 1/2 DO" = 18). 2. Extrae PRECIO TOTAL PAGADO POR LÍNEA en "precio_total_linea" (SIN IGV si el recibo lo detalla aparte, o CON IGV si ya está incluido por línea). Extrae JSON plano: {"proveedor": "Nombre", "ruc": "RUC", "numero_comprobante": "Serie-Corr", "fecha": "YYYY-MM-DD", "subtotal": 0, "igv": 0, "otros_cargos": 0, "total": 0, "items": [{"nombreOriginal": "Desc", "cantidad": 1, "precio_total_linea": 0}]}`
+      const prompt = `Analiza detenidamente este comprobante. REGLAS: 1. Convierte docenas a unidades ("1 1/2 DO" = 18). 2. Extrae PRECIO TOTAL PAGADO POR LÍNEA en "precio_total_linea" (SIN IGV si el recibo lo detalla aparte). Extrae JSON plano: {"proveedor": "Nombre", "ruc": "RUC", "numero_comprobante": "Serie-Corr", "fecha": "YYYY-MM-DD", "subtotal": 0, "igv": 0, "otros_cargos": 0, "total": 0, "items": [{"nombreOriginal": "Desc exacta del recibo", "cantidad": 1, "precio_total_linea": 0}]}`
 
       const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`,
@@ -170,8 +200,12 @@ export default function AdminCompras() {
       const itemsProcesados = (resultado.items || []).map(item => {
         const coincidencia = productosDB.find(p => p.nombre.toLowerCase().includes(item.nombreOriginal.toLowerCase()) || item.nombreOriginal.toLowerCase().includes(p.nombre.toLowerCase()))
         return {
-          id_temp: Date.now() + Math.random(), nombreOriginal: item.nombreOriginal, cantidad: Number(item.cantidad) || 1,
-          precio_total_linea: Number(item.precio_total_linea) || 0, producto_db_id: coincidencia ? coincidencia.id : null, estado: coincidencia ? 'vinculado' : 'pendiente'
+          id_temp: Date.now() + Math.random(), 
+          nombreOriginal: item.nombreOriginal, 
+          cantidad: Number(item.cantidad) || 1,
+          precio_total_linea: Number(item.precio_total_linea) || 0, 
+          producto_db_id: coincidencia ? coincidencia.id : null, 
+          estado: coincidencia ? 'vinculado' : 'pendiente'
         }
       })
 
@@ -181,11 +215,11 @@ export default function AdminCompras() {
         subtotal: Number(resultado.subtotal) || 0, igv: Number(resultado.igv) || 0, otros_cargos: Number(resultado.otros_cargos) || 0, 
         total: Number(resultado.total) || 0, enlace_drive: '', items: itemsProcesados
       })
-      toast.success('Documento analizado, verifica los montos e impuestos')
+      toast.success('Documento analizado. Tus datos se autoguardarán.')
     } catch (error) { toast.error('Error IA: ' + error.message) } finally { setProcesandoPdf(false) }
   }
 
-  // Funciones de formulario interactivo (Auto-Cálculo de Totales)
+  // Funciones de formulario interactivo
   const agregarFilaManual = () => setDatosFactura(prev => ({ ...prev, items: [...prev.items, { id_temp: Date.now(), nombreOriginal: '', cantidad: 1, precio_total_linea: 0, producto_db_id: null, estado: 'pendiente' }] }))
   const quitarFila = (idTemp) => {
     setDatosFactura(prev => {
@@ -195,7 +229,9 @@ export default function AdminCompras() {
       return { ...prev, items: nuevosItems, subtotal: nuevoSub, total: nuevoTotal };
     })
   }
-  const emparejarProducto = (idTemp, idDB, txt) => setDatosFactura(prev => ({ ...prev, items: prev.items.map(i => i.id_temp === idTemp ? { ...i, producto_db_id: idDB, nombreOriginal: txt || i.nombreOriginal, estado: idDB ? 'vinculado' : 'pendiente' } : i) }))
+  
+  // Vinculación separada (no borra el nombre original)
+  const emparejarProducto = (idTemp, idDB) => setDatosFactura(prev => ({ ...prev, items: prev.items.map(i => i.id_temp === idTemp ? { ...i, producto_db_id: idDB, estado: idDB ? 'vinculado' : 'pendiente' } : i) }))
   
   const cambiarDatoItem = (idTemp, c, v) => {
     setDatosFactura(prev => {
@@ -219,55 +255,57 @@ export default function AdminCompras() {
     })
   }
 
+  // REGLA DE 3 MESES
+  const fechaFactura = new Date(datosFactura.fecha);
+  const fechaHace3Meses = new Date(); fechaHace3Meses.setMonth(fechaHace3Meses.getMonth() - 3);
+  const obligarVinculacion = fechaFactura < fechaHace3Meses;
+
   const guardarCompra = async () => {
     if (!datosFactura.proveedor) return toast.error('Falta proveedor')
     if (!datosFactura.enlace_drive || datosFactura.enlace_drive.trim() === '') return toast.error('El enlace de Google Drive es obligatorio')
     
     const pendientes = datosFactura.items.filter(i => !i.producto_db_id)
-    if (pendientes.length > 0) return toast.error('Hay productos sin vincular.')
+    
+    // Si la factura es antigua (>3 meses), bloqueamos. Si es reciente, advertimos pero dejamos guardar.
+    if (pendientes.length > 0 && obligarVinculacion) {
+      return toast.error('Comprobante antiguo (>3 meses). Debes vincular TODOS los productos al almacén obligatoriamente.')
+    }
 
     setCargando(true)
     try {
-      // 1. Guardar la cabecera de la factura
       const payloadCompra = {
-        empresa: datosFactura.proveedor, 
-        ruc: datosFactura.ruc || '00000000000',
-        subtotal: datosFactura.subtotal,
-        igv: datosFactura.igv,
-        otros_cargos: datosFactura.otros_cargos,
-        total: datosFactura.total, 
-        fecha_compra: datosFactura.fecha, 
-        numero_comprobante: datosFactura.numero_comprobante || 'S/N',
-        enlace_drive: datosFactura.enlace_drive
+        empresa: datosFactura.proveedor, ruc: datosFactura.ruc || '00000000000', subtotal: datosFactura.subtotal,
+        igv: datosFactura.igv, otros_cargos: datosFactura.otros_cargos, total: datosFactura.total, 
+        fecha_compra: datosFactura.fecha, numero_comprobante: datosFactura.numero_comprobante || 'S/N', enlace_drive: datosFactura.enlace_drive
       }
       
       const { data: compraData, error: errCompra } = await supabase.from('compras').insert(payloadCompra).select().single()
       if (errCompra) throw errCompra
 
-      // 2. Lógica de DISTRIBUCIÓN PROPORCIONAL DE IMPUESTOS
       const subtotalBase = Number(datosFactura.subtotal) || 1;
       const totalConImpuestos = Number(datosFactura.total) || 1;
       const factorDistribucion = datosFactura.subtotal > 0 ? (totalConImpuestos / subtotalBase) : 1;
 
       for (const item of datosFactura.items) {
-        // Multiplicamos el costo de la línea por el factor para añadirle su porción de IGV/Otros
         const costoTotalLineaConImpuestos = Number(item.precio_total_linea) * factorDistribucion;
         const unitarioReal = costoTotalLineaConImpuestos / (Number(item.cantidad) || 1);
 
         await supabase.from('compra_items').insert({
           compra_id: compraData.id, 
-          producto_id: item.producto_db_id, 
+          producto_id: item.producto_db_id || null, // Permite null si guardó como pendiente
+          nombre_original: item.nombreOriginal, // ¡Aquí se guarda el precedente histórico!
           cantidad: item.cantidad,
-          precio_unitario: unitarioReal, // Este precio ya INCLUYE el IGV proporcional
+          precio_unitario: unitarioReal, 
           subtotal: costoTotalLineaConImpuestos
         })
         
-        // Actualizar Stock
-        const prodDB = productosDB.find(p => p.id === item.producto_db_id)
-        if (prodDB) await supabase.from('productos').update({ stock: prodDB.stock + Number(item.cantidad) }).eq('id', prodDB.id)
+        if (item.producto_db_id) {
+          const prodDB = productosDB.find(p => p.id === item.producto_db_id)
+          if (prodDB) await supabase.from('productos').update({ stock: prodDB.stock + Number(item.cantidad) }).eq('id', prodDB.id)
+        }
       }
 
-      toast.success('Compra registrada con impuestos distribuidos')
+      toast.success(pendientes.length > 0 ? 'Compra registrada con productos pendientes.' : 'Compra registrada y almacén actualizado.')
       resetearIngreso(); cargarHistorial(); cargarProductos(); setTabActual('historial')
     } catch (error) { toast.error('Error al guardar: ' + error.message) } finally { setCargando(false) }
   }
@@ -282,16 +320,16 @@ export default function AdminCompras() {
            (c.ruc || '').toLowerCase().includes(termino) || 
            (c.numero_comprobante || '').toLowerCase().includes(termino) || 
            (c.total || '').toString().includes(termino) || 
-           c.compra_items?.some(i => (i.productos?.nombre || '').toLowerCase().includes(termino));
+           c.compra_items?.some(i => (i.nombre_original || '').toLowerCase().includes(termino) || (i.productos?.nombre || '').toLowerCase().includes(termino));
   })
 
   let gastoTotal = 0; let productosComprados = 0; const productosStats = {}
   comprasHistorial.forEach(compra => {
     compra.compra_items?.forEach(item => {
-      const p = item.productos
+      const p = item.productos // Solo sumamos para análisis si está vinculado a almacén
       if (p) {
         if (busquedaAnalisis && !p.nombre.toLowerCase().includes(busquedaAnalisis.toLowerCase())) return;
-        const cant = Number(item.cantidad || 0); const gasto = (cant * Number(item.precio_unitario)) // Este gasto YA INCLUYE IMPUESTOS
+        const cant = Number(item.cantidad || 0); const gasto = (cant * Number(item.precio_unitario))
         productosComprados += cant; gastoTotal += gasto
         if (!productosStats[item.producto_id]) productosStats[item.producto_id] = { nombre: p.nombre, cantidad: 0, gasto: 0 }
         productosStats[item.producto_id].cantidad += cant
@@ -315,9 +353,13 @@ export default function AdminCompras() {
 
   const compraActiva = comprasHistorial.find(c => c.id === compraExpandida)
 
+  const imprimirComprobante = () => { window.print() }
+
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+      <style>{estilosImpresion}</style>
+      
+      <div className="no-print" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
         <h1 style={{ fontFamily: 'var(--fuente-display)', fontSize: 24, fontWeight: 800 }}>Gestión de Compras<span style={{ color: 'var(--naranja)' }}>.</span></h1>
         <div style={{ display: 'flex', background: 'var(--fondo)', padding: 4, borderRadius: 8, gap: 4 }}>
           <button onClick={() => setTabActual('registro')} className={tabActual === 'registro' ? 'btn-primary' : 'btn-ghost'} style={{ fontSize: 13, padding: '6px 12px' }}><UploadCloud size={16} /> Registro</button>
@@ -328,7 +370,7 @@ export default function AdminCompras() {
 
       {/* -------------------- TAB REGISTRO -------------------- */}
       {tabActual === 'registro' && (
-        <div style={{ display: 'grid', gridTemplateColumns: modoIngreso === 'ia' ? '1fr 1fr' : '1fr', gap: 20, minHeight: 'calc(100vh - 120px)' }}>
+        <div className="no-print" style={{ display: 'grid', gridTemplateColumns: modoIngreso === 'ia' ? '1fr 1fr' : '1fr', gap: 20, minHeight: 'calc(100vh - 120px)' }}>
           {!modoIngreso && (
             <div style={{ display: 'flex', gap: 20, justifyContent: 'center', alignItems: 'center', flexDirection: 'column' }}>
               <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16 }}>¿Cómo deseas registrar la compra?</h2>
@@ -350,19 +392,19 @@ export default function AdminCompras() {
             <div className="card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
               <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--borde)', background: 'var(--fondo)', display: 'flex', justifyContent: 'space-between' }}>
                 <h3 style={{ fontSize: 14, fontWeight: 700 }}>Documento Adjunto</h3>
-                <button onClick={resetearIngreso} className="btn-ghost" style={{ padding: '4px 12px', fontSize: 12, color: '#D00' }}>Quitar</button>
+                <button onClick={resetearIngreso} className="btn-ghost" style={{ padding: '4px 12px', fontSize: 12, color: '#D00' }}>Limpiar Borrador</button>
               </div>
               <div style={{ flex: 1, background: '#525659', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <iframe src={pdfUrl} width="100%" height="100%" style={{ border: 'none' }} title="Vista" />
+                {pdfUrl ? <iframe src={pdfUrl} width="100%" height="100%" style={{ border: 'none' }} title="Vista" /> : <p style={{ color: '#fff', fontSize: 12 }}>Sube un documento de nuevo para previsualizar (El formulario se ha restaurado)</p>}
               </div>
             </div>
           )}
 
           {modoIngreso && (
             <div className="card" style={{ padding: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', margin: modoIngreso === 'manual' ? '0 auto' : 0, maxWidth: modoIngreso === 'manual' ? 700 : '100%', width: '100%' }}>
-              <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--borde)', background: 'var(--fondo)', display: 'flex', justifyContent: 'space-between' }}>
-                <h3 style={{ fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>Formulario {procesandoPdf && <span className="spinner" style={{ width: 14, height: 14 }} />}</h3>
-                {modoIngreso === 'manual' && <button onClick={resetearIngreso} className="btn-ghost" style={{ padding: '4px 12px', fontSize: 12, color: '#D00' }}>Cancelar</button>}
+              <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--borde)', background: 'var(--fondo)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>Formulario Autoguardado {procesandoPdf && <span className="spinner" style={{ width: 14, height: 14 }} />}</h3>
+                {modoIngreso === 'manual' && <button onClick={resetearIngreso} className="btn-ghost" style={{ padding: '4px 12px', fontSize: 12, color: '#D00' }}>Descartar Borrador</button>}
               </div>
 
               <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
@@ -378,7 +420,11 @@ export default function AdminCompras() {
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                       <div><label style={{ fontSize: 11, fontWeight: 600 }}>RUC</label><input type="text" value={datosFactura.ruc} onChange={e => cambiarDatoFactura('ruc', e.target.value)} style={{ width: '100%', fontSize: 13 }} /></div>
-                      <div><label style={{ fontSize: 11, fontWeight: 600 }}>Fecha</label><input type="date" value={datosFactura.fecha} onChange={e => cambiarDatoFactura('fecha', e.target.value)} style={{ width: '100%', fontSize: 13 }} /></div>
+                      <div>
+                        <label style={{ fontSize: 11, fontWeight: 600 }}>Fecha</label>
+                        <input type="date" value={datosFactura.fecha} onChange={e => cambiarDatoFactura('fecha', e.target.value)} style={{ width: '100%', fontSize: 13, color: obligarVinculacion ? '#D00' : 'inherit' }} />
+                        {obligarVinculacion && <p style={{ fontSize: 10, color: '#D00', marginTop: 4 }}>+3 meses (Vinculación Obligatoria)</p>}
+                      </div>
                       <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: 11, fontWeight: 600 }}>Proveedor / Empresa</label><input type="text" value={datosFactura.proveedor} onChange={e => cambiarDatoFactura('proveedor', e.target.value)} style={{ width: '100%', fontSize: 13 }} /></div>
                       <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: 11, fontWeight: 600 }}>N° Boleta/Factura</label><input type="text" value={datosFactura.numero_comprobante} onChange={e => cambiarDatoFactura('numero_comprobante', e.target.value)} style={{ width: '100%', fontSize: 13 }} /></div>
                     </div>
@@ -389,24 +435,31 @@ export default function AdminCompras() {
                     </div>
                       
                     {datosFactura.items.map((item) => {
+                      const unitarioDerivado = (Number(item.precio_total_linea) / (Number(item.cantidad) || 1)).toFixed(4)
                       return (
                       <div key={item.id_temp} style={{ padding: 12, border: `1px solid ${item.estado === 'vinculado' ? '#10b981' : '#f59e0b'}`, borderRadius: 8, marginBottom: 12, background: item.estado === 'vinculado' ? '#10b98108' : '#f59e0b08', position: 'relative' }}>
                         {modoIngreso === 'manual' && datosFactura.items.length > 1 && <button onClick={() => quitarFila(item.id_temp)} style={{ position: 'absolute', top: 8, right: 8, background: 'none', border: 'none', color: '#D00', cursor: 'pointer', fontSize: 12 }}>X</button>}
-                        {modoIngreso === 'ia' && <p style={{ fontSize: 11, color: 'var(--texto-suave)', marginBottom: 4 }}>PDF: <b>{item.nombreOriginal}</b></p>}
                         
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8, marginTop: modoIngreso === 'manual' ? 12 : 0 }}>
-                          <BuscadorProductos item={item} productosDB={productosDB} onSelect={(id, texto) => emparejarProducto(item.id_temp, id, texto)} />
-                          {item.estado === 'vinculado' ? <CheckCircle size={20} color="#10b981" style={{ minWidth: 20 }} /> : <AlertCircle size={18} color="#f59e0b" />}
+                        {/* Nombre del Recibo Físico (Precedente) */}
+                        <div style={{ marginBottom: 12 }}>
+                           <label style={{ fontSize: 10, color: 'var(--texto-suave)' }}>Descripción Original (Boleta):</label>
+                           <input type="text" value={item.nombreOriginal} onChange={e => cambiarDatoItem(item.id_temp, 'nombreOriginal', e.target.value)} style={{ width: '100%', fontSize: 13, fontWeight: 600, padding: '4px 8px', border: '1px solid var(--borde)', borderRadius: 4 }} />
+                        </div>
+
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                          <BuscadorProductos item={item} productosDB={productosDB} onSelect={(id) => emparejarProducto(item.id_temp, id)} />
+                          {item.estado === 'vinculado' ? <CheckCircle size={20} color="#10b981" style={{ minWidth: 20 }} /> : <AlertCircle size={18} color={obligarVinculacion ? "#D00" : "#f59e0b"} />}
                         </div>
 
                         <div style={{ display: 'flex', gap: 8 }}>
                           <div style={{ flex: 1 }}><label style={{ fontSize: 10 }}>Cantidad</label><input type="number" value={item.cantidad} onChange={e => cambiarDatoItem(item.id_temp, 'cantidad', e.target.value)} style={{ width: '100%', fontSize: 12 }} /></div>
                           <div style={{ flex: 1 }}><label style={{ fontSize: 10, fontWeight: 700, color: 'var(--texto-suave)' }}>Subtotal Línea (S/)</label><input type="number" step="any" value={item.precio_total_linea} onChange={e => cambiarDatoItem(item.id_temp, 'precio_total_linea', e.target.value)} style={{ width: '100%', fontSize: 12 }} /></div>
                         </div>
+                        {/* PRECIO UNITARIO RECUPERADO */}
+                        <div style={{ marginTop: 8, textAlign: 'right' }}><span style={{ fontSize: 11, color: 'var(--texto-suave)' }}>Unitario Base: <b>S/ {unitarioDerivado}</b></span></div>
                       </div>
                     )})}
                     
-                    {/* IMPUESTOS Y CARGOS RECUPERADOS */}
                     <div style={{ background: 'var(--fondo)', padding: 16, borderRadius: 8, border: '1px solid var(--borde)', marginTop: 8 }}>
                       <h4 style={{ fontSize: 12, fontWeight: 700, marginBottom: 12, color: 'var(--texto-suave)' }}>Desglose de Totales y Cargos</h4>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
@@ -415,7 +468,6 @@ export default function AdminCompras() {
                         <div><label style={{ fontSize: 11, fontWeight: 600 }}>Otros Cargos (Envíos, etc)</label><input type="number" step="any" value={datosFactura.otros_cargos} onChange={e => cambiarDatoFactura('otros_cargos', e.target.value)} style={{ width: '100%', fontSize: 13 }} /></div>
                         <div><label style={{ fontSize: 11, fontWeight: 800, color: 'var(--naranja)' }}>TOTAL FINAL (S/)</label><input type="number" step="any" value={datosFactura.total} onChange={e => cambiarDatoFactura('total', e.target.value)} style={{ width: '100%', fontSize: 14, fontWeight: 700, color: 'var(--naranja)', border: '1px solid var(--naranja)' }} /></div>
                       </div>
-                      <p style={{ fontSize: 10, color: '#10b981' }}>* El IGV y otros cargos se distribuirán matemáticamente en el costo unitario de cada producto para asegurar que la proyección del 30% sea precisa.</p>
                     </div>
 
                   </div>
@@ -429,12 +481,11 @@ export default function AdminCompras() {
         </div>
       )}
 
-      {/* -------------------- TAB HISTORIAL (RECIBO DIGITAL ACTUALIZADO) -------------------- */}
+      {/* -------------------- TAB HISTORIAL -------------------- */}
       {tabActual === 'historial' && (
-        <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+        <div className="no-print" style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
           
           <div style={{ flex: '1 1 50%', display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {/* Buscadores... (sin cambios) */}
             <div className="card" style={{ padding: '16px 20px', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
               <div style={{ flex: 1, minWidth: '100%', position: 'relative' }}>
                 <Search size={16} style={{ position: 'absolute', left: 12, top: 10, color: 'var(--texto-suave)' }} />
@@ -463,12 +514,23 @@ export default function AdminCompras() {
             )}
           </div>
           
-          {/* PLANTILLA DE RECIBO CON IMPUESTOS INCLUIDOS */}
+          {/* PLANTILLA DE RECIBO (Y ZONA DE IMPRESIÓN) */}
           <div style={{ flex: '1 1 50%', position: 'sticky', top: 20 }}>
             {compraActiva ? (
-              <div style={{ background: '#fff', borderRadius: 12, boxShadow: '0 10px 25px rgba(0,0,0,0.1)', padding: 32, fontFamily: '"Courier New", Courier, monospace', border: '1px solid #e5e7eb' }}>
+              <div id="zona-impresion" style={{ background: '#fff', borderRadius: 12, boxShadow: '0 10px 25px rgba(0,0,0,0.1)', padding: 32, fontFamily: '"Courier New", Courier, monospace', border: '1px solid #e5e7eb', position: 'relative' }}>
+                
+                {/* Botones Flotantes (No se imprimen) */}
+                <div className="no-print" style={{ position: 'absolute', top: 16, right: 16, display: 'flex', gap: 8 }}>
+                   <button onClick={() => setOcultarAlmacen(!ocultarAlmacen)} className="btn-ghost" title="Ocultar/Mostrar vinculación de Almacén" style={{ padding: 8 }}>
+                     {ocultarAlmacen ? <EyeOff size={16} color="var(--texto-suave)" /> : <Eye size={16} color="#3b82f6" />}
+                   </button>
+                   <button onClick={imprimirComprobante} className="btn-primary" style={{ padding: 8, background: '#111827', color: '#fff' }}>
+                     <Printer size={16} /> Imprimir / PDF
+                   </button>
+                </div>
+
                 <div style={{ textAlign: 'center', borderBottom: '2px dashed #d1d5db', paddingBottom: 20, marginBottom: 20 }}>
-                  <Receipt size={40} style={{ margin: '0 auto 10px', color: '#4b5563' }} />
+                  <Receipt size={40} style={{ margin: '0 auto 10px', color: '#4b5563' }} className="no-print" />
                   <h2 style={{ fontSize: 18, fontWeight: 800, textTransform: 'uppercase', margin: 0 }}>Comprobante Digital</h2>
                   <p style={{ fontSize: 12, color: '#6b7280', margin: '4px 0 0' }}>SISTEMA DE GESTIÓN DE INVENTARIO</p>
                 </div>
@@ -485,24 +547,37 @@ export default function AdminCompras() {
                     <tr style={{ borderBottom: '1px dashed #d1d5db' }}>
                       <th style={{ textAlign: 'left', padding: '8px 0' }}>CANT</th>
                       <th style={{ textAlign: 'left', padding: '8px 0' }}>DESCRIPCIÓN</th>
-                      <th style={{ textAlign: 'right', padding: '8px 0' }}>COSTO DISTRIBUIDO</th>
+                      <th style={{ textAlign: 'right', padding: '8px 0' }}>COSTO</th>
                     </tr>
                   </thead>
                   <tbody>
                     {compraActiva.compra_items.map((item, idx) => (
                       <tr key={idx} style={{ borderBottom: '1px dashed #f3f4f6' }}>
                         <td style={{ padding: '8px 0', verticalAlign: 'top' }}>{item.cantidad}</td>
-                        <td style={{ padding: '8px 4px', fontWeight: 600 }}>
-                          {item.productos?.nombre || 'Desconocido'}
-                          <div style={{ fontSize: 10, color: '#9ca3af', fontWeight: 400 }}>Unitario Real: S/ {Number(item.precio_unitario).toFixed(4)}</div>
+                        <td style={{ padding: '8px 4px' }}>
+                          <div style={{ fontWeight: 700 }}>{item.nombre_original || 'Sin descripción original'}</div>
+                          
+                          {/* Muestra Almacén solo si está vinculado y el Toggle no lo oculta */}
+                          {!ocultarAlmacen && item.productos && (
+                            <div style={{ fontSize: 10, color: '#3b82f6', fontWeight: 600, marginTop: 2 }}>
+                              ↳ Almacén: {item.productos.nombre}
+                            </div>
+                          )}
+                          {!ocultarAlmacen && !item.productos && (
+                            <div style={{ fontSize: 10, color: '#f59e0b', fontWeight: 600, marginTop: 2 }}>
+                              ↳ Almacén: Pendiente (Sin vincular)
+                            </div>
+                          )}
+
+                          <div style={{ fontSize: 10, color: '#9ca3af', fontWeight: 400, marginTop: 2 }}>Unit. Real: S/ {Number(item.precio_unitario).toFixed(4)}</div>
                         </td>
-                        <td style={{ padding: '8px 0', textAlign: 'right', verticalAlign: 'top' }}>S/ {Number(item.subtotal).toFixed(2)}</td>
+                        <td style={{ padding: '8px 0', textAlign: 'right', verticalAlign: 'top', fontWeight: 600 }}>S/ {Number(item.subtotal).toFixed(2)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
 
-                {/* Resumen Financiero en Recibo */}
+                {/* Resumen Financiero */}
                 <div style={{ borderTop: '1px dashed #d1d5db', paddingTop: 16, fontSize: 12 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', color: '#6b7280', marginBottom: 4 }}>
                     <span>SUBTOTAL ITEMS:</span> <span>S/ {Number(compraActiva.subtotal || 0).toFixed(2)}</span>
@@ -519,15 +594,11 @@ export default function AdminCompras() {
                   </div>
                 </div>
 
-                {compraActiva.enlace_drive ? (
-                  <div style={{ marginTop: 30, textAlign: 'center' }}>
+                {compraActiva.enlace_drive && (
+                  <div className="no-print" style={{ marginTop: 30, textAlign: 'center' }}>
                     <a href={compraActiva.enlace_drive} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#3b82f6', color: '#fff', padding: '10px 20px', borderRadius: 8, textDecoration: 'none', fontSize: 13, fontWeight: 600 }}>
                       <ExternalLink size={16} /> Ver Documento Original en Drive
                     </a>
-                  </div>
-                ) : (
-                  <div style={{ marginTop: 30, textAlign: 'center', fontSize: 11, color: '#9ca3af' }}>
-                    Sin documento adjunto en Drive.
                   </div>
                 )}
               </div>
@@ -541,13 +612,13 @@ export default function AdminCompras() {
         </div>
       )}
 
-      {/* -------------------- TAB ANÁLISIS (Se mantiene intacta) -------------------- */}
+      {/* -------------------- TAB ANÁLISIS -------------------- */}
       {tabActual === 'analisis' && (
-        <div className="analisis-container">
+        <div className="analisis-container no-print">
           <div className="card" style={{ padding: '16px 20px', marginBottom: 20, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
             <div style={{ flex: 1, minWidth: 250, position: 'relative' }}>
               <Search size={16} style={{ position: 'absolute', left: 12, top: 10, color: 'var(--texto-suave)' }} />
-              <input type="text" placeholder="🔍 Filtrar métricas por nombre de producto..." value={busquedaAnalisis} onChange={(e) => setBusquedaAnalisis(e.target.value)} style={{ width: '100%', padding: '8px 12px 8px 36px', fontSize: 13, borderRadius: 8, border: '1px solid var(--borde)' }} />
+              <input type="text" placeholder="🔍 Filtrar métricas por nombre de producto de almacén..." value={busquedaAnalisis} onChange={(e) => setBusquedaAnalisis(e.target.value)} style={{ width: '100%', padding: '8px 12px 8px 36px', fontSize: 13, borderRadius: 8, border: '1px solid var(--borde)' }} />
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <Calendar size={16} color="var(--texto-suave)" />
@@ -594,7 +665,6 @@ export default function AdminCompras() {
             </div>
           )}
 
-          {/* ... Aquí siguen las tablas de Top 5 (código sin cambios) ... */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
             <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
               <div style={{ padding: '12px 16px', background: 'var(--fondo)', borderBottom: '1px solid var(--borde)' }}><h3 style={{ fontSize: 13, fontWeight: 700, color: '#3b82f6' }}>🔥 Top 5 Más Pedidos (Unidades)</h3></div>
