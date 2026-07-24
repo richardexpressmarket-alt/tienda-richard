@@ -3,25 +3,25 @@ import { supabase } from '../../lib/supabase'
 import { 
   UploadCloud, FileText, CheckCircle, AlertCircle, 
   BarChart3, Calendar, Package, ShoppingCart, RefreshCw, 
-  Plus, Edit3, Search, ExternalLink, Receipt, Printer, EyeOff, Eye
+  Plus, Edit3, Search, ExternalLink, Receipt, Printer, EyeOff, Eye, Trash2
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'
 
 // --------------------------------------------------------
-// ESTILOS PARA IMPRESIÓN (Oculta el resto de la web al imprimir)
+// ESTILOS PARA IMPRESIÓN 
 // --------------------------------------------------------
 const estilosImpresion = `
   @media print {
     body * { visibility: hidden; }
     #zona-impresion, #zona-impresion * { visibility: visible; }
-    #zona-impresion { position: absolute; left: 0; top: 0; width: 100%; padding: 20px; }
+    #zona-impresion { position: absolute; left: 0; top: 0; width: 100%; padding: 20px; border: none !important; box-shadow: none !important; }
     .no-print { display: none !important; }
   }
 `;
 
 // --------------------------------------------------------
-// COMPONENTE: Buscador con autocompletado (No borra el original)
+// COMPONENTE: Buscador con autocompletado 
 // --------------------------------------------------------
 const BuscadorProductos = ({ item, productosDB, onSelect }) => {
   const prodVinculado = productosDB.find(p => p.id === item.producto_db_id)
@@ -89,7 +89,7 @@ export default function AdminCompras() {
   // Estados Historial
   const [busquedaHistorial, setBusquedaHistorial] = useState('')
   const [compraExpandida, setCompraExpandida] = useState(null)
-  const [ocultarAlmacen, setOcultarAlmacen] = useState(false) // Toggle para impresión
+  const [ocultarAlmacen, setOcultarAlmacen] = useState(false) 
 
   // Estados Análisis
   const [busquedaAnalisis, setBusquedaAnalisis] = useState('')
@@ -100,9 +100,7 @@ export default function AdminCompras() {
     const d = new Date(); return new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0]
   })
 
-  // --------------------------------------------------------
-  // AUTO-GUARDADO (Recuperar Borrador)
-  // --------------------------------------------------------
+  // AUTO-GUARDADO
   useEffect(() => {
     const borrador = localStorage.getItem('borradorCompras')
     if (borrador) {
@@ -114,13 +112,11 @@ export default function AdminCompras() {
     }
   }, [])
 
-  // Guardar en localStorage cada vez que haya un cambio
   useEffect(() => {
     if (modoIngreso) {
       localStorage.setItem('borradorCompras', JSON.stringify({ modoIngreso, datosFactura }))
     }
   }, [datosFactura, modoIngreso])
-
 
   useEffect(() => {
     cargarProductos()
@@ -144,9 +140,7 @@ export default function AdminCompras() {
     setCargando(false)
   }
 
-  // --------------------------------------------------------
-  // LÓGICA DE REGISTRO E IA
-  // --------------------------------------------------------
+  // IA y Archivos
   const convertirPdfABase64 = (file) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader(); reader.readAsDataURL(file);
@@ -221,6 +215,7 @@ export default function AdminCompras() {
 
   // Funciones de formulario interactivo
   const agregarFilaManual = () => setDatosFactura(prev => ({ ...prev, items: [...prev.items, { id_temp: Date.now(), nombreOriginal: '', cantidad: 1, precio_total_linea: 0, producto_db_id: null, estado: 'pendiente' }] }))
+  
   const quitarFila = (idTemp) => {
     setDatosFactura(prev => {
       const nuevosItems = prev.items.filter(i => i.id_temp !== idTemp);
@@ -230,7 +225,6 @@ export default function AdminCompras() {
     })
   }
   
-  // Vinculación separada (no borra el nombre original)
   const emparejarProducto = (idTemp, idDB) => setDatosFactura(prev => ({ ...prev, items: prev.items.map(i => i.id_temp === idTemp ? { ...i, producto_db_id: idDB, estado: idDB ? 'vinculado' : 'pendiente' } : i) }))
   
   const cambiarDatoItem = (idTemp, c, v) => {
@@ -265,8 +259,6 @@ export default function AdminCompras() {
     if (!datosFactura.enlace_drive || datosFactura.enlace_drive.trim() === '') return toast.error('El enlace de Google Drive es obligatorio')
     
     const pendientes = datosFactura.items.filter(i => !i.producto_db_id)
-    
-    // Si la factura es antigua (>3 meses), bloqueamos. Si es reciente, advertimos pero dejamos guardar.
     if (pendientes.length > 0 && obligarVinculacion) {
       return toast.error('Comprobante antiguo (>3 meses). Debes vincular TODOS los productos al almacén obligatoriamente.')
     }
@@ -292,8 +284,8 @@ export default function AdminCompras() {
 
         await supabase.from('compra_items').insert({
           compra_id: compraData.id, 
-          producto_id: item.producto_db_id || null, // Permite null si guardó como pendiente
-          nombre_original: item.nombreOriginal, // ¡Aquí se guarda el precedente histórico!
+          producto_id: item.producto_db_id || null, 
+          nombre_original: item.nombreOriginal, 
           cantidad: item.cantidad,
           precio_unitario: unitarioReal, 
           subtotal: costoTotalLineaConImpuestos
@@ -311,6 +303,44 @@ export default function AdminCompras() {
   }
 
   // --------------------------------------------------------
+  // LÓGICA ELIMINAR COMPRA (Restaura stock)
+  // --------------------------------------------------------
+  const eliminarCompra = async (id) => {
+    if (!window.confirm('¿Estás seguro de ELIMINAR esta compra? Se restarán los productos del almacén y se borrarán todos sus datos del sistema.')) return;
+    
+    setCargando(true);
+    try {
+      const compraObj = comprasHistorial.find(c => c.id === id);
+      
+      // 1. Revertir el Stock en Almacén
+      if (compraObj && compraObj.compra_items) {
+        for (const item of compraObj.compra_items) {
+          if (item.producto_id) {
+            const prodDB = productosDB.find(p => p.id === item.producto_id);
+            if (prodDB) {
+              await supabase.from('productos').update({ stock: prodDB.stock - Number(item.cantidad) }).eq('id', prodDB.id);
+            }
+          }
+        }
+      }
+      
+      // 2. Eliminar de la Base de Datos (Primero items, luego cabecera)
+      await supabase.from('compra_items').delete().eq('compra_id', id);
+      await supabase.from('compras').delete().eq('id', id);
+      
+      toast.success('Compra eliminada correctamente del sistema.');
+      setCompraExpandida(null);
+      cargarHistorial(); 
+      cargarProductos();
+    } catch (error) {
+      toast.error('Error al eliminar: ' + error.message);
+    } finally {
+      setCargando(false);
+    }
+  }
+
+
+  // --------------------------------------------------------
   // LÓGICA DE HISTORIAL Y ANÁLISIS
   // --------------------------------------------------------
   const comprasFiltradasHistorial = comprasHistorial.filter(c => {
@@ -326,7 +356,7 @@ export default function AdminCompras() {
   let gastoTotal = 0; let productosComprados = 0; const productosStats = {}
   comprasHistorial.forEach(compra => {
     compra.compra_items?.forEach(item => {
-      const p = item.productos // Solo sumamos para análisis si está vinculado a almacén
+      const p = item.productos 
       if (p) {
         if (busquedaAnalisis && !p.nombre.toLowerCase().includes(busquedaAnalisis.toLowerCase())) return;
         const cant = Number(item.cantidad || 0); const gasto = (cant * Number(item.precio_unitario))
@@ -389,13 +419,16 @@ export default function AdminCompras() {
           )}
 
           {modoIngreso === 'ia' && (
-            <div className="card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-              <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--borde)', background: 'var(--fondo)', display: 'flex', justifyContent: 'space-between' }}>
-                <h3 style={{ fontSize: 14, fontWeight: 700 }}>Documento Adjunto</h3>
-                <button onClick={resetearIngreso} className="btn-ghost" style={{ padding: '4px 12px', fontSize: 12, color: '#D00' }}>Limpiar Borrador</button>
-              </div>
-              <div style={{ flex: 1, background: '#525659', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {pdfUrl ? <iframe src={pdfUrl} width="100%" height="100%" style={{ border: 'none' }} title="Vista" /> : <p style={{ color: '#fff', fontSize: 12 }}>Sube un documento de nuevo para previsualizar (El formulario se ha restaurado)</p>}
+            // AQUI ESTÁ EL CAMBIO PARA EL PDF STICKY (PEGAJOSO)
+            <div style={{ position: 'sticky', top: 20, height: 'calc(100vh - 40px)', display: 'flex', flexDirection: 'column' }}>
+              <div className="card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', flex: 1 }}>
+                <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--borde)', background: 'var(--fondo)', display: 'flex', justifyContent: 'space-between' }}>
+                  <h3 style={{ fontSize: 14, fontWeight: 700 }}>Documento Adjunto</h3>
+                  <button onClick={resetearIngreso} className="btn-ghost" style={{ padding: '4px 12px', fontSize: 12, color: '#D00' }}>Limpiar Borrador</button>
+                </div>
+                <div style={{ flex: 1, background: '#525659', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {pdfUrl ? <iframe src={pdfUrl} width="100%" height="100%" style={{ border: 'none' }} title="Vista" /> : <p style={{ color: '#fff', fontSize: 12 }}>Sube un documento de nuevo para previsualizar (El formulario se ha restaurado)</p>}
+                </div>
               </div>
             </div>
           )}
@@ -407,7 +440,7 @@ export default function AdminCompras() {
                 {modoIngreso === 'manual' && <button onClick={resetearIngreso} className="btn-ghost" style={{ padding: '4px 12px', fontSize: 12, color: '#D00' }}>Descartar Borrador</button>}
               </div>
 
-              <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
+              <div style={{ flex: 1, padding: 20 }}>
                 {procesandoPdf ? ( <div style={{ textAlign: 'center', padding: '40px 0' }}><RefreshCw size={32} className="spin" style={{ margin: '0 auto 16px', color: 'var(--naranja)' }} /><p>Analizando...</p></div> ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                     
@@ -440,7 +473,6 @@ export default function AdminCompras() {
                       <div key={item.id_temp} style={{ padding: 12, border: `1px solid ${item.estado === 'vinculado' ? '#10b981' : '#f59e0b'}`, borderRadius: 8, marginBottom: 12, background: item.estado === 'vinculado' ? '#10b98108' : '#f59e0b08', position: 'relative' }}>
                         {modoIngreso === 'manual' && datosFactura.items.length > 1 && <button onClick={() => quitarFila(item.id_temp)} style={{ position: 'absolute', top: 8, right: 8, background: 'none', border: 'none', color: '#D00', cursor: 'pointer', fontSize: 12 }}>X</button>}
                         
-                        {/* Nombre del Recibo Físico (Precedente) */}
                         <div style={{ marginBottom: 12 }}>
                            <label style={{ fontSize: 10, color: 'var(--texto-suave)' }}>Descripción Original (Boleta):</label>
                            <input type="text" value={item.nombreOriginal} onChange={e => cambiarDatoItem(item.id_temp, 'nombreOriginal', e.target.value)} style={{ width: '100%', fontSize: 13, fontWeight: 600, padding: '4px 8px', border: '1px solid var(--borde)', borderRadius: 4 }} />
@@ -455,7 +487,6 @@ export default function AdminCompras() {
                           <div style={{ flex: 1 }}><label style={{ fontSize: 10 }}>Cantidad</label><input type="number" value={item.cantidad} onChange={e => cambiarDatoItem(item.id_temp, 'cantidad', e.target.value)} style={{ width: '100%', fontSize: 12 }} /></div>
                           <div style={{ flex: 1 }}><label style={{ fontSize: 10, fontWeight: 700, color: 'var(--texto-suave)' }}>Subtotal Línea (S/)</label><input type="number" step="any" value={item.precio_total_linea} onChange={e => cambiarDatoItem(item.id_temp, 'precio_total_linea', e.target.value)} style={{ width: '100%', fontSize: 12 }} /></div>
                         </div>
-                        {/* PRECIO UNITARIO RECUPERADO */}
                         <div style={{ marginTop: 8, textAlign: 'right' }}><span style={{ fontSize: 11, color: 'var(--texto-suave)' }}>Unitario Base: <b>S/ {unitarioDerivado}</b></span></div>
                       </div>
                     )})}
@@ -514,13 +545,19 @@ export default function AdminCompras() {
             )}
           </div>
           
-          {/* PLANTILLA DE RECIBO (Y ZONA DE IMPRESIÓN) */}
+          {/* PLANTILLA DE RECIBO Y BOTON DE ELIMINAR */}
           <div style={{ flex: '1 1 50%', position: 'sticky', top: 20 }}>
             {compraActiva ? (
               <div id="zona-impresion" style={{ background: '#fff', borderRadius: 12, boxShadow: '0 10px 25px rgba(0,0,0,0.1)', padding: 32, fontFamily: '"Courier New", Courier, monospace', border: '1px solid #e5e7eb', position: 'relative' }}>
                 
                 {/* Botones Flotantes (No se imprimen) */}
-                <div className="no-print" style={{ position: 'absolute', top: 16, right: 16, display: 'flex', gap: 8 }}>
+                <div className="no-print" style={{ position: 'absolute', top: 16, right: 16, display: 'flex', gap: 8, alignItems: 'center' }}>
+                   
+                   {/* BOTON ELIMINAR REGISTRO */}
+                   <button onClick={() => eliminarCompra(compraActiva.id)} className="btn-ghost" title="Eliminar Registro Completamente" style={{ padding: 8, color: '#ef4444', border: '1px solid #fee2e2', background: '#fef2f2' }}>
+                     <Trash2 size={16} />
+                   </button>
+                   
                    <button onClick={() => setOcultarAlmacen(!ocultarAlmacen)} className="btn-ghost" title="Ocultar/Mostrar vinculación de Almacén" style={{ padding: 8 }}>
                      {ocultarAlmacen ? <EyeOff size={16} color="var(--texto-suave)" /> : <Eye size={16} color="#3b82f6" />}
                    </button>
@@ -557,7 +594,6 @@ export default function AdminCompras() {
                         <td style={{ padding: '8px 4px' }}>
                           <div style={{ fontWeight: 700 }}>{item.nombre_original || 'Sin descripción original'}</div>
                           
-                          {/* Muestra Almacén solo si está vinculado y el Toggle no lo oculta */}
                           {!ocultarAlmacen && item.productos && (
                             <div style={{ fontSize: 10, color: '#3b82f6', fontWeight: 600, marginTop: 2 }}>
                               ↳ Almacén: {item.productos.nombre}
@@ -577,7 +613,6 @@ export default function AdminCompras() {
                   </tbody>
                 </table>
 
-                {/* Resumen Financiero */}
                 <div style={{ borderTop: '1px dashed #d1d5db', paddingTop: 16, fontSize: 12 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', color: '#6b7280', marginBottom: 4 }}>
                     <span>SUBTOTAL ITEMS:</span> <span>S/ {Number(compraActiva.subtotal || 0).toFixed(2)}</span>
