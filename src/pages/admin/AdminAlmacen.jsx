@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { exportarCSV } from '../../lib/exportar'
-import { Package, Search, Download, Plus, Pencil, Trash2, X, ChevronDown } from 'lucide-react'
+import { Package, Search, Download, Plus, Pencil, Trash2, X, ChevronDown, Printer } from 'lucide-react'
 import toast from 'react-hot-toast'
+import jsPDF from 'jspdf'
+import 'jspdf-autotable'
 
 export default function AdminAlmacen() {
   const [productos, setProductos]       = useState([])
@@ -133,6 +135,67 @@ export default function AdminAlmacen() {
     toast.success('Excel exportado ✅')
   }
 
+  // — LÓGICA DE EXPORTACIÓN A HOJA DE CONTEO FÍSICO
+  const imprimirConteoInventario = () => {
+    if (productosFiltrados.length === 0) return toast.error('No hay productos para exportar en la vista actual')
+
+    // 1. Agrupar los productos actuales de la tabla por su categoría/sección
+    const grupos = productosFiltrados.reduce((acc, prod) => {
+      const seccion = prod.secciones?.nombre || 'SIN SECCIÓN ASIGNADA';
+      if (!acc[seccion]) acc[seccion] = [];
+      acc[seccion].push(prod);
+      return acc;
+    }, {});
+
+    const doc = new jsPDF();
+    let esPrimeraHoja = true;
+
+    // 2. Iterar por cada grupo y crear una tabla nueva en una página nueva
+    Object.keys(grupos).sort().forEach(seccion => {
+      if (!esPrimeraHoja) {
+        doc.addPage(); // Si no es la primera sección, crea hoja nueva
+      }
+      esPrimeraHoja = false;
+
+      // Título de la Sección en la hoja
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Toma de Inventario Físico - Sector: ${seccion}`, 14, 15);
+      
+      // Fecha
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Fecha de impresión: ${new Date().toLocaleDateString()}`, 14, 22);
+
+      // Tabla de productos de esta sección
+      const tableData = grupos[seccion].map(prod => [
+        prod.nombre,
+        prod.stock, // Stock que dice el sistema
+        '',         // Espacio en blanco para anotar nuevo stock con lapicero
+        ''          // Espacio en blanco para anotar nueva sección
+      ]);
+
+      doc.autoTable({
+        head: [['Nombre del Producto', 'Stock Sistema', 'Stock Físico (Anotar)', 'Nueva Sección (Opcional)']],
+        body: tableData,
+        startY: 28,
+        theme: 'grid', // Dibuja todos los bordes para escribir
+        headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+        columnStyles: {
+          0: { cellWidth: 80 }, // Ancho para nombre
+          1: { cellWidth: 30, halign: 'center' }, // Stock actual
+          2: { cellWidth: 40 }, // Espacio blanco Stock Físico
+          3: { cellWidth: 40 }  // Espacio blanco Cambio Sección
+        },
+        styles: { fontSize: 10, cellPadding: 4, minCellHeight: 10 }
+      });
+    });
+
+    // Descargar el PDF
+    doc.save('hojas_conteo_inventario.pdf');
+    toast.success('Hojas de conteo generadas ✅')
+  }
+
   return (
     <div>
       {/* Cabecera */}
@@ -149,6 +212,9 @@ export default function AdminAlmacen() {
           </button>
           <button onClick={handleExportar} className="btn-ghost" style={{ fontSize: 13 }}>
             <Download size={14} /> Excel
+          </button>
+          <button onClick={imprimirConteoInventario} className="btn-ghost" style={{ fontSize: 13, border: '1px solid #3b82f6', color: '#3b82f6' }}>
+            <Printer size={14} /> Imprimir Hoja de Conteo (PDF)
           </button>
         </div>
       </div>
