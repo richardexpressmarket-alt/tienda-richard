@@ -135,11 +135,10 @@ export default function AdminAlmacen() {
     toast.success('Excel exportado ✅')
   }
 
-  // — LÓGICA DE EXPORTACIÓN A HOJA DE CONTEO FÍSICO
+  // — LÓGICA DE EXPORTACIÓN A HOJA DE CONTEO FÍSICO (1 HOJA POR SECCIÓN, FORMATO COMPACTO)
   const imprimirConteoInventario = () => {
     if (productosFiltrados.length === 0) return toast.error('No hay productos para exportar en la vista actual')
 
-    // 1. Agrupar los productos actuales de la tabla por su categoría/sección
     const grupos = productosFiltrados.reduce((acc, prod) => {
       const seccion = prod.secciones?.nombre || 'SIN SECCIÓN ASIGNADA';
       if (!acc[seccion]) acc[seccion] = [];
@@ -150,50 +149,64 @@ export default function AdminAlmacen() {
     const doc = new jsPDF();
     let esPrimeraHoja = true;
 
-    // 2. Iterar por cada grupo y crear una tabla nueva en una página nueva
     Object.keys(grupos).sort().forEach(seccion => {
+      // Salto de hoja obligado por cada sección para poder repartirlas
       if (!esPrimeraHoja) {
-        doc.addPage(); // Si no es la primera sección, crea hoja nueva
+        doc.addPage(); 
       }
       esPrimeraHoja = false;
 
-      // Título de la Sección en la hoja
-      doc.setFontSize(14);
+      // Título Principal
+      doc.setFontSize(12);
       doc.setFont('helvetica', 'bold');
-      doc.text(`Toma de Inventario Físico - Sector: ${seccion}`, 14, 15);
+      doc.text('Toma de Inventario Físico', 14, 12);
       
       // Fecha
-      doc.setFontSize(10);
+      doc.setFontSize(8);
       doc.setFont('helvetica', 'normal');
-      doc.text(`Fecha de impresión: ${new Date().toLocaleDateString()}`, 14, 22);
+      doc.text(`Fecha de impresión: ${new Date().toLocaleDateString()}`, 14, 17);
 
-      // Tabla de productos de esta sección
+      // Título de la Sección compacto
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Sector / Sección: ${seccion}`, 14, 23);
+
       const tableData = grupos[seccion].map(prod => [
         prod.nombre,
-        prod.stock, // Stock que dice el sistema
-        '',         // Espacio en blanco para anotar nuevo stock con lapicero
-        ''          // Espacio en blanco para anotar nueva sección
+        prod.stock, 
+        '',         
+        ''          
       ]);
 
       doc.autoTable({
-        head: [['Nombre del Producto', 'Stock Sistema', 'Stock Físico (Anotar)', 'Nueva Sección (Opcional)']],
+        head: [['Producto', 'Sist.', 'Físico', 'Nva Sec.']],
         body: tableData,
-        startY: 28,
-        theme: 'grid', // Dibuja todos los bordes para escribir
-        headStyles: { fillColor: [41, 128, 185], textColor: 255 },
-        columnStyles: {
-          0: { cellWidth: 80 }, // Ancho para nombre
-          1: { cellWidth: 30, halign: 'center' }, // Stock actual
-          2: { cellWidth: 40 }, // Espacio blanco Stock Físico
-          3: { cellWidth: 40 }  // Espacio blanco Cambio Sección
+        startY: 26, // Siempre inicia a la misma altura en la hoja nueva
+        theme: 'grid', 
+        headStyles: { 
+          fillColor: [240, 240, 240], // Gris muy claro para ahorrar tinta
+          textColor: [0, 0, 0],       // Letra negra
+          fontStyle: 'bold' 
         },
-        styles: { fontSize: 10, cellPadding: 4, minCellHeight: 10 }
+        columnStyles: {
+          0: { cellWidth: 'auto' }, // Toma todo el espacio disponible
+          1: { cellWidth: 15, halign: 'center' }, // Stock Sistema
+          2: { cellWidth: 25 }, // Stock Físico (Ancho para anotar un número)
+          3: { cellWidth: 35 }  // Nueva Sección (Ancho para escribir breve)
+        },
+        styles: { 
+          fontSize: 8,          // Letra pequeña
+          cellPadding: 1.5,     // Espacio interior mínimo
+          minCellHeight: 6,     // Altura mínima reducida
+          textColor: [0, 0, 0], 
+          lineColor: [0, 0, 0], // Bordes negros
+          lineWidth: 0.1
+        }
       });
     });
 
-    // Descargar el PDF
     doc.save('hojas_conteo_inventario.pdf');
-    toast.success('Hojas de conteo generadas ✅')
+    toast.success('Hojas de conteo listas (1 por sección) ✅')
   }
 
   return (
