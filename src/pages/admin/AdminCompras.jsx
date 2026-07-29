@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { 
   UploadCloud, FileText, CheckCircle, AlertCircle, 
   BarChart3, Calendar, Package, ShoppingCart, RefreshCw, 
-  Plus, Edit3, Search, ExternalLink, Receipt, Printer, EyeOff, Eye, Trash2, Download, ListChecks, SkipForward
+  Plus, Edit3, Search, ExternalLink, Receipt, Printer, EyeOff, Eye, Trash2, Download, ListChecks, SkipForward, ArrowLeft
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'
@@ -25,7 +25,7 @@ const estilosImpresion = `
 // --------------------------------------------------------
 // COMPONENTE: Buscador con autocompletado
 // --------------------------------------------------------
-const BuscadorProductos = ({ item, productosDB, onSelect }) => {
+const BuscadorProductos = ({ item, productosDB, onSelect, placeholder = "🔍 Vincular con producto..." }) => {
   const prodVinculado = productosDB.find(p => p.id === item.producto_db_id)
   const [busqueda, setBusqueda] = useState(prodVinculado ? prodVinculado.nombre : '')
   const [mostrarOpciones, setMostrarOpciones] = useState(false)
@@ -43,7 +43,7 @@ const BuscadorProductos = ({ item, productosDB, onSelect }) => {
     <div style={{ flex: 1, position: 'relative' }}>
       <input
         type="text"
-        placeholder="🔍 Vincular con producto de almacén..."
+        placeholder={placeholder}
         value={busqueda}
         onChange={e => { setBusqueda(e.target.value); setMostrarOpciones(true); onSelect(null) }}
         onFocus={() => setMostrarOpciones(true)}
@@ -82,7 +82,7 @@ export default function AdminCompras() {
   const [indiceCola, setIndiceCola] = useState(0)
 
   const [datosFactura, setDatosFactura] = useState({
-    proveedor: '', ruc: '', numero_comprobante: '', fecha: new Date().toISOString().split('T')[0], 
+    proveedor: '', ruc: '', tipo_comprobante: 'Factura', numero_comprobante: '', fecha: new Date().toISOString().split('T')[0], 
     subtotal: 0, igv: 0, otros_cargos: 0, total: 0, enlace_drive: '', items: []
   })
 
@@ -118,7 +118,7 @@ export default function AdminCompras() {
   }
   async function cargarHistorial() {
     setCargando(true)
-    const { data } = await supabase.from('compras').select('*, compra_items(*, productos(nombre))').gte('fecha_compra', desde + 'T00:00:00').lte('fecha_compra', hasta + 'T23:59:59').order('fecha_compra', { ascending: false })
+    const { data } = await supabase.from('compras').select('*, compra_items(*, productos(*))').gte('fecha_compra', desde + 'T00:00:00').lte('fecha_compra', hasta + 'T23:59:59').order('fecha_compra', { ascending: false })
     setComprasHistorial(data || [])
     setCargando(false)
   }
@@ -152,12 +152,12 @@ export default function AdminCompras() {
 
   const iniciarModoManual = () => {
     setPdfUrl(''); setModoIngreso('manual'); setColaArchivos([])
-    setDatosFactura({ proveedor: '', ruc: '', numero_comprobante: '', fecha: new Date().toISOString().split('T')[0], subtotal: 0, igv: 0, otros_cargos: 0, total: 0, enlace_drive: '', items: [{ id_temp: Date.now(), nombreOriginal: '', cantidad: 1, precio_total_linea: 0, producto_db_id: null, estado: 'pendiente' }] })
+    setDatosFactura({ proveedor: '', ruc: '', tipo_comprobante: 'Factura', numero_comprobante: '', fecha: new Date().toISOString().split('T')[0], subtotal: 0, igv: 0, otros_cargos: 0, total: 0, enlace_drive: '', items: [{ id_temp: Date.now(), nombreOriginal: '', cantidad: 1, precio_total_linea: 0, producto_db_id: null, estado: 'pendiente' }] })
   }
 
   const resetearIngreso = () => {
     setModoIngreso(null); setPdfUrl(''); setColaArchivos([]); localStorage.removeItem('borradorCompras')
-    setDatosFactura({ proveedor: '', ruc: '', numero_comprobante: '', fecha: new Date().toISOString().split('T')[0], subtotal: 0, igv: 0, otros_cargos: 0, total: 0, enlace_drive: '', items: [] })
+    setDatosFactura({ proveedor: '', ruc: '', tipo_comprobante: 'Factura', numero_comprobante: '', fecha: new Date().toISOString().split('T')[0], subtotal: 0, igv: 0, otros_cargos: 0, total: 0, enlace_drive: '', items: [] })
   }
 
   // ALGORITMO INTELIGENTE DE MATCHING (Aprende del historial)
@@ -186,7 +186,7 @@ export default function AdminCompras() {
       const base64Pdf = await convertirPdfABase64(file)
       const mimeType = file.type === 'application/pdf' ? 'application/pdf' : file.type
 
-      const prompt = `Analiza detenidamente este comprobante. REGLAS: 1. Convierte docenas a unidades. 2. Extrae PRECIO TOTAL PAGADO POR LÍNEA. Extrae JSON plano: {"proveedor": "Nombre", "ruc": "RUC", "numero_comprobante": "Serie-Corr", "fecha": "YYYY-MM-DD", "subtotal": 0, "igv": 0, "otros_cargos": 0, "total": 0, "items": [{"nombreOriginal": "Desc exacta del recibo", "cantidad": 1, "precio_total_linea": 0}]}`
+      const prompt = `Analiza detenidamente este comprobante. REGLAS: 1. Convierte docenas a unidades. 2. Extrae PRECIO TOTAL PAGADO POR LÍNEA. Extrae JSON plano: {"proveedor": "Nombre", "ruc": "RUC", "tipo_comprobante": "Factura o Boleta", "numero_comprobante": "Serie-Corr", "fecha": "YYYY-MM-DD", "subtotal": 0, "igv": 0, "otros_cargos": 0, "total": 0, "items": [{"nombreOriginal": "Desc exacta del recibo", "cantidad": 1, "precio_total_linea": 0}]}`
 
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`,
         { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ inline_data: { mime_type: mimeType, data: base64Pdf } }, { text: prompt }] }] }) }
@@ -210,7 +210,7 @@ export default function AdminCompras() {
       })
 
       setDatosFactura({
-        proveedor: resultado.proveedor || '', ruc: resultado.ruc || '', numero_comprobante: resultado.numero_comprobante || '',
+        proveedor: resultado.proveedor || '', ruc: resultado.ruc || '', tipo_comprobante: resultado.tipo_comprobante || 'Factura', numero_comprobante: resultado.numero_comprobante || '',
         fecha: resultado.fecha || new Date().toISOString().split('T')[0], subtotal: Number(resultado.subtotal) || 0, 
         igv: Number(resultado.igv) || 0, otros_cargos: Number(resultado.otros_cargos) || 0, total: Number(resultado.total) || 0, enlace_drive: '', items: itemsProcesados
       })
@@ -242,7 +242,8 @@ export default function AdminCompras() {
 
     setCargando(true)
     try {
-      const payloadCompra = { empresa: datosFactura.proveedor, ruc: datosFactura.ruc || '00000000000', subtotal: datosFactura.subtotal, igv: datosFactura.igv, otros_cargos: datosFactura.otros_cargos, total: datosFactura.total, fecha_compra: datosFactura.fecha, numero_comprobante: datosFactura.numero_comprobante || 'S/N', enlace_drive: datosFactura.enlace_drive }
+      // Nota: Asegúrate de tener la columna 'tipo_comprobante' en tu tabla 'compras' en Supabase.
+      const payloadCompra = { empresa: datosFactura.proveedor, ruc: datosFactura.ruc || '00000000000', tipo_comprobante: datosFactura.tipo_comprobante, subtotal: datosFactura.subtotal, igv: datosFactura.igv, otros_cargos: datosFactura.otros_cargos, total: datosFactura.total, fecha_compra: datosFactura.fecha, numero_comprobante: datosFactura.numero_comprobante || 'S/N', enlace_drive: datosFactura.enlace_drive }
       const { data: compraData, error: errCompra } = await supabase.from('compras').insert(payloadCompra).select().single()
       if (errCompra) throw errCompra
 
@@ -278,21 +279,41 @@ export default function AdminCompras() {
     } catch (error) { toast.error('Error: ' + error.message); } finally { setCargando(false); }
   }
 
+  // --- NUEVO: VINCULAR PENDIENTE DESDE HISTORIAL ---
+  const subsanarPendiente = async (compraId, itemId, productoId, cantidad) => {
+    if (!productoId) return;
+    if (!window.confirm('¿Vincular este producto pendiente al almacén? Se sumará el stock correspondiente.')) return;
+    setCargando(true);
+    try {
+      await supabase.from('compra_items').update({ producto_id: productoId }).eq('id', itemId);
+      const prod = productosDB.find(p => p.id === productoId);
+      if (prod) {
+        await supabase.from('productos').update({ stock: prod.stock + Number(cantidad) }).eq('id', productoId);
+      }
+      toast.success('Producto vinculado y stock actualizado correctamente.');
+      cargarHistorial(); cargarProductos();
+    } catch (error) {
+      toast.error('Error al vincular: ' + error.message);
+    } finally {
+      setCargando(false);
+    }
+  }
+
   // --- LOGICA EXPORTACIÓN ---
   const exportarTXT = () => {
     let contenido = `HISTORIAL DE COMPRAS\nDesde: ${desde} - Hasta: ${hasta}\n\n`;
-    comprasFiltradasHistorial.forEach(c => { contenido += `FECHA: ${c.fecha_compra} | PROVEEDOR: ${c.empresa} | RUC: ${c.ruc} | BOLETA: ${c.numero_comprobante} | TOTAL: S/ ${Number(c.total).toFixed(2)}\n`; })
+    comprasFiltradasHistorial.forEach(c => { contenido += `FECHA: ${c.fecha_compra} | TIPO: ${c.tipo_comprobante || 'Factura'} | PROVEEDOR: ${c.empresa} | RUC: ${c.ruc} | COMPROBANTE: ${c.numero_comprobante} | TOTAL: S/ ${Number(c.total).toFixed(2)}\n`; })
     const blob = new Blob([contenido], { type: 'text/plain' }); const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'historial_compras.txt'; link.click();
   }
   const exportarCSV = () => {
-    let contenido = `Fecha,Proveedor,RUC,Boleta,Total\n`;
-    comprasFiltradasHistorial.forEach(c => { contenido += `${c.fecha_compra},"${c.empresa}",${c.ruc},${c.numero_comprobante},${Number(c.total).toFixed(2)}\n`; })
+    let contenido = `Fecha,Tipo,Proveedor,RUC,Comprobante,Total\n`;
+    comprasFiltradasHistorial.forEach(c => { contenido += `${c.fecha_compra},${c.tipo_comprobante || 'Factura'},"${c.empresa}",${c.ruc},${c.numero_comprobante},${Number(c.total).toFixed(2)}\n`; })
     const blob = new Blob([contenido], { type: 'text/csv' }); const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'historial_compras.csv'; link.click();
   }
   const exportarPDF = () => {
     const doc = new jsPDF(); doc.text('Historial de Compras', 14, 15); doc.setFontSize(10); doc.text(`Desde: ${desde} - Hasta: ${hasta}`, 14, 22);
-    const tableData = comprasFiltradasHistorial.map(c => [c.fecha_compra, c.empresa, c.ruc, c.numero_comprobante, `S/ ${Number(c.total).toFixed(2)}`])
-    doc.autoTable({ head: [['Fecha', 'Proveedor', 'RUC', 'Comprobante', 'Total']], body: tableData, startY: 28 })
+    const tableData = comprasFiltradasHistorial.map(c => [c.fecha_compra, c.tipo_comprobante || 'Factura', c.empresa, c.ruc, c.numero_comprobante, `S/ ${Number(c.total).toFixed(2)}`])
+    doc.autoTable({ head: [['Fecha', 'Tipo', 'Proveedor', 'RUC', 'Comprobante', 'Total']], body: tableData, startY: 28 })
     doc.save('historial_compras.pdf');
   }
 
@@ -301,21 +322,33 @@ export default function AdminCompras() {
     if (!busquedaHistorial) return true; const t = busquedaHistorial.toLowerCase();
     return (c.empresa||'').toLowerCase().includes(t) || (c.ruc||'').toLowerCase().includes(t) || (c.numero_comprobante||'').toLowerCase().includes(t) || (c.total||'').toString().includes(t) || c.compra_items?.some(i => (i.nombre_original||'').toLowerCase().includes(t) || (i.productos?.nombre||'').toLowerCase().includes(t));
   })
-  let gastoTotal = 0; let productosComprados = 0; const productosStats = {}
+  
+  let gastoTotal = 0; let productosComprados = 0; const productosStats = {}; const comprasPorDia = {};
+  
   comprasHistorial.forEach(c => {
+    // Para gráfico de días
+    const dia = c.fecha_compra;
+    if (!comprasPorDia[dia]) comprasPorDia[dia] = 0;
+    comprasPorDia[dia] += Number(c.total);
+
     c.compra_items?.forEach(i => {
       const p = i.productos 
       if (p) {
         if (busquedaAnalisis && !p.nombre.toLowerCase().includes(busquedaAnalisis.toLowerCase())) return;
         const cant = Number(i.cantidad||0); const gasto = cant * Number(i.precio_unitario); productosComprados += cant; gastoTotal += gasto
-        if (!productosStats[i.producto_id]) productosStats[i.producto_id] = { nombre: p.nombre, cantidad: 0, gasto: 0 }; productosStats[i.producto_id].cantidad += cant; productosStats[i.producto_id].gasto += gasto
+        if (!productosStats[i.producto_id]) productosStats[i.producto_id] = { id: i.producto_id, nombre: p.nombre, cantidad: 0, gasto: 0 }; 
+        productosStats[i.producto_id].cantidad += cant; productosStats[i.producto_id].gasto += gasto
       }
     })
   })
   const dias = Math.max(1, Math.ceil((new Date(hasta+'T23:59:59') - new Date(desde+'T00:00:00')) / 86400000)); const promedioGastoDiario = gastoTotal / dias;
   const statsArray = Object.values(productosStats).map(p => ({ ...p, costoPromedio: p.cantidad > 0 ? (p.gasto / p.cantidad) : 0 }))
-  const topComprados = [...statsArray].sort((a, b) => b.cantidad - a.cantidad).slice(0, 5); const menosComprados = [...statsArray].sort((a, b) => a.cantidad - b.cantidad).slice(0, 5); const masCostosos = [...statsArray].sort((a, b) => b.costoPromedio - a.costoPromedio).slice(0, 5); const menosCostosos = [...statsArray].sort((a, b) => a.costoPromedio - b.costoPromedio).slice(0, 5)
+  
+  const chartDiasData = Object.keys(comprasPorDia).map(k => ({ Fecha: k, Inversión: parseFloat(comprasPorDia[k].toFixed(2)) })).sort((a,b) => a.Fecha.localeCompare(b.Fecha));
   const chartData = statsArray.sort((a, b) => b.gasto - a.gasto).slice(0, 10).map(p => ({ name: p.nombre.substring(0, 15) + '...', Inversión: parseFloat(p.gasto.toFixed(2)), Unidades: p.cantidad }))
+  const topComprados = [...statsArray].sort((a, b) => b.cantidad - a.cantidad).slice(0, 5); 
+  const menosComprados = [...statsArray].sort((a, b) => a.cantidad - b.cantidad).slice(0, 5); 
+  
   const compraActiva = comprasHistorial.find(c => c.id === compraExpandida)
 
   return (
@@ -374,11 +407,17 @@ export default function AdminCompras() {
                 <h3 style={{ fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
                   Formulario {colaArchivos.length > 1 ? '(Lote a Verificar)' : 'Autoguardado'} {procesandoPdf && <span className="spinner" style={{ width: 14, height: 14 }} />}
                 </h3>
-                {colaArchivos.length > 1 && indiceCola + 1 < colaArchivos.length && (
-                  <button onClick={saltarAlSiguienteDocumento} className="btn-ghost" style={{ padding: '4px 12px', fontSize: 12, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <SkipForward size={14}/> Saltar este doc
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {colaArchivos.length > 1 && indiceCola + 1 < colaArchivos.length && (
+                    <button onClick={saltarAlSiguienteDocumento} className="btn-ghost" style={{ padding: '4px 12px', fontSize: 12, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <SkipForward size={14}/> Saltar este doc
+                    </button>
+                  )}
+                  {/* BOTÓN PARA CANCELAR MANUAL O CUALQUIER MODO */}
+                  <button onClick={resetearIngreso} className="btn-ghost" style={{ padding: '4px 12px', fontSize: 12, color: '#D00', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <ArrowLeft size={14}/> Cancelar / Volver
                   </button>
-                )}
+                </div>
               </div>
 
               <div style={{ flex: 1, padding: 20 }}>
@@ -389,8 +428,16 @@ export default function AdminCompras() {
                       <input type="url" placeholder="https://drive.google.com/file/d/..." value={datosFactura.enlace_drive} onChange={e => cambiarDatoFactura('enlace_drive', e.target.value)} style={{ width: '100%', fontSize: 13, padding: '8px 12px', border: '1px solid #3b82f655', borderRadius: 4 }} required />
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
                       <div><label style={{ fontSize: 11, fontWeight: 600 }}>RUC</label><input type="text" value={datosFactura.ruc} onChange={e => cambiarDatoFactura('ruc', e.target.value)} style={{ width: '100%', fontSize: 13 }} /></div>
+                      <div>
+                        <label style={{ fontSize: 11, fontWeight: 600 }}>Tipo Comprobante</label>
+                        <select value={datosFactura.tipo_comprobante} onChange={e => cambiarDatoFactura('tipo_comprobante', e.target.value)} style={{ width: '100%', fontSize: 13 }}>
+                          <option value="Factura">Factura</option>
+                          <option value="Boleta">Boleta</option>
+                          <option value="Otro">Otro</option>
+                        </select>
+                      </div>
                       <div><label style={{ fontSize: 11, fontWeight: 600 }}>Fecha</label><input type="date" value={datosFactura.fecha} onChange={e => cambiarDatoFactura('fecha', e.target.value)} style={{ width: '100%', fontSize: 13, color: obligarVinculacion ? '#D00' : 'inherit' }} />{obligarVinculacion && <p style={{ fontSize: 10, color: '#D00' }}>+3 meses (Vinculación Obligatoria)</p>}</div>
                       <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: 11, fontWeight: 600 }}>Proveedor / Empresa</label><input type="text" value={datosFactura.proveedor} onChange={e => cambiarDatoFactura('proveedor', e.target.value)} style={{ width: '100%', fontSize: 13 }} /></div>
                       <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: 11, fontWeight: 600 }}>N° Boleta/Factura</label><input type="text" value={datosFactura.numero_comprobante} onChange={e => cambiarDatoFactura('numero_comprobante', e.target.value)} style={{ width: '100%', fontSize: 13 }} /></div>
@@ -467,7 +514,7 @@ export default function AdminCompras() {
             {cargando ? <div className="spinner" style={{ margin: '40px auto' }} /> : comprasFiltradasHistorial.length === 0 ? ( <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--texto-suave)' }}>Sin resultados.</div> ) : (
               comprasFiltradasHistorial.map(c => (
                 <div key={c.id} onClick={() => setCompraExpandida(c.id)} className="card" style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', border: compraExpandida === c.id ? '2px solid var(--naranja)' : '1px solid transparent', background: compraExpandida === c.id ? 'var(--fondo)' : '#fff' }}>
-                  <div><h3 style={{ fontSize: 14, fontWeight: 700, color: compraExpandida === c.id ? 'var(--naranja)' : 'inherit' }}>{c.empresa}</h3><p style={{ fontSize: 11, color: 'var(--texto-suave)' }}>{c.fecha_compra} | Boleta: {c.numero_comprobante || 'S/N'}</p></div>
+                  <div><h3 style={{ fontSize: 14, fontWeight: 700, color: compraExpandida === c.id ? 'var(--naranja)' : 'inherit' }}>{c.empresa}</h3><p style={{ fontSize: 11, color: 'var(--texto-suave)' }}>{c.fecha_compra} | {c.tipo_comprobante || 'Factura'}: {c.numero_comprobante || 'S/N'}</p></div>
                   <div style={{ textAlign: 'right' }}><p style={{ fontSize: 16, fontWeight: 800, color: '#D00' }}>S/ {Number(c.total).toFixed(2)}</p></div>
                 </div>
               ))
@@ -483,14 +530,29 @@ export default function AdminCompras() {
                    <button onClick={() => window.print()} className="btn-primary" style={{ padding: 8, background: '#111827', color: '#fff' }}><Printer size={16} /> Imprimir Doc.</button>
                 </div>
                 <div style={{ textAlign: 'center', borderBottom: '2px dashed #d1d5db', paddingBottom: 20, marginBottom: 20 }}><Receipt size={40} style={{ margin: '0 auto 10px', color: '#4b5563' }} className="no-print" /><h2 style={{ fontSize: 18, fontWeight: 800, textTransform: 'uppercase', margin: 0 }}>Comprobante Digital</h2><p style={{ fontSize: 12, color: '#6b7280', margin: '4px 0 0' }}>SISTEMA DE GESTIÓN DE INVENTARIO</p></div>
-                <div style={{ marginBottom: 24, fontSize: 13, lineHeight: '1.6' }}><div style={{ display: 'flex', justifyContent: 'space-between' }}><b>PROVEEDOR:</b> <span>{compraActiva.empresa}</span></div><div style={{ display: 'flex', justifyContent: 'space-between' }}><b>RUC:</b> <span>{compraActiva.ruc}</span></div><div style={{ display: 'flex', justifyContent: 'space-between' }}><b>N° COMPROBANTE:</b> <span>{compraActiva.numero_comprobante}</span></div><div style={{ display: 'flex', justifyContent: 'space-between' }}><b>FECHA:</b> <span>{compraActiva.fecha_compra}</span></div></div>
+                <div style={{ marginBottom: 24, fontSize: 13, lineHeight: '1.6' }}><div style={{ display: 'flex', justifyContent: 'space-between' }}><b>PROVEEDOR:</b> <span>{compraActiva.empresa}</span></div><div style={{ display: 'flex', justifyContent: 'space-between' }}><b>RUC:</b> <span>{compraActiva.ruc}</span></div><div style={{ display: 'flex', justifyContent: 'space-between' }}><b>TIPO Y N° COMPROBANTE:</b> <span>{compraActiva.tipo_comprobante || 'Factura'} {compraActiva.numero_comprobante}</span></div><div style={{ display: 'flex', justifyContent: 'space-between' }}><b>FECHA:</b> <span>{compraActiva.fecha_compra}</span></div></div>
                 <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse', marginBottom: 16 }}>
                   <thead><tr style={{ borderBottom: '1px dashed #d1d5db' }}><th style={{ textAlign: 'left', padding: '8px 0' }}>CANT</th><th style={{ textAlign: 'left', padding: '8px 0' }}>DESCRIPCIÓN</th><th style={{ textAlign: 'right', padding: '8px 0' }}>COSTO</th></tr></thead>
                   <tbody>
                     {compraActiva.compra_items.map((item, idx) => (
-                      <tr key={idx} style={{ borderBottom: '1px dashed #f3f4f6' }}>
+                      <tr key={item.id} style={{ borderBottom: '1px dashed #f3f4f6' }}>
                         <td style={{ padding: '8px 0', verticalAlign: 'top' }}>{item.cantidad}</td>
-                        <td style={{ padding: '8px 4px' }}><div style={{ fontWeight: 700 }}>{item.nombre_original || 'Sin descripción'}</div>{!ocultarAlmacen && item.productos && (<div style={{ fontSize: 10, color: '#3b82f6', fontWeight: 600, marginTop: 2 }}>↳ Almacén: {item.productos.nombre}</div>)}{!ocultarAlmacen && !item.productos && (<div style={{ fontSize: 10, color: '#f59e0b', fontWeight: 600, marginTop: 2 }}>↳ Almacén: Pendiente</div>)}<div style={{ fontSize: 10, color: '#9ca3af', fontWeight: 400, marginTop: 2 }}>Unit. Real: S/ {Number(item.precio_unitario).toFixed(4)}</div></td>
+                        <td style={{ padding: '8px 4px' }}>
+                          <div style={{ fontWeight: 700 }}>{item.nombre_original || 'Sin descripción'}</div>
+                          
+                          {!ocultarAlmacen && item.productos && (<div style={{ fontSize: 10, color: '#3b82f6', fontWeight: 600, marginTop: 2 }}>↳ Almacén: {item.productos.nombre}</div>)}
+                          
+                          {/* SUBSANAR PENDIENTES DESDE EL HISTORIAL */}
+                          {!ocultarAlmacen && !item.productos && (
+                            <div className="no-print" style={{ marginTop: 6, background: '#fef3c7', padding: '6px', borderRadius: '4px', border: '1px dashed #f59e0b' }}>
+                              <p style={{ fontSize: 10, color: '#d97706', fontWeight: 700, marginBottom: 4 }}>⚠️ Producto Pendiente (Subsanar):</p>
+                              <BuscadorProductos item={{ producto_db_id: null }} productosDB={productosDB} placeholder="Buscar y vincular..." onSelect={(id) => subsanarPendiente(compraActiva.id, item.id, id, item.cantidad)} />
+                            </div>
+                          )}
+                          {!ocultarAlmacen && !item.productos && <div className="solo-print" style={{ fontSize: 10, color: '#f59e0b', fontWeight: 600, marginTop: 2 }}>↳ Almacén: Pendiente</div>}
+                          
+                          <div style={{ fontSize: 10, color: '#9ca3af', fontWeight: 400, marginTop: 2 }}>Unit. Real: S/ {Number(item.precio_unitario).toFixed(4)}</div>
+                        </td>
                         <td style={{ padding: '8px 0', textAlign: 'right', verticalAlign: 'top', fontWeight: 600 }}>S/ {Number(item.subtotal).toFixed(2)}</td>
                       </tr>
                     ))}
@@ -514,14 +576,108 @@ export default function AdminCompras() {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Calendar size={16} color="var(--texto-suave)" /><input type="date" value={desde} onChange={e => setDesde(e.target.value)} style={{ width: 'auto', padding: '6px 10px', fontSize: 12 }} /><span>-</span><input type="date" value={hasta} onChange={e => setHasta(e.target.value)} style={{ width: 'auto', padding: '6px 10px', fontSize: 12 }} /></div>
           </div>
-          {/* Gráficos y Tablas omitidos para brevedad, sigue idéntico a tu última versión */}
+          
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
             <div className="card" style={{ padding: 20, borderTop: '3px solid #D00' }}><p style={{ fontSize: 12, color: 'var(--texto-suave)', fontWeight: 600 }}>Total Invertido</p><h3 style={{ fontSize: 26, fontWeight: 800, marginTop: 4, color: '#D00' }}>S/ {gastoTotal.toFixed(2)}</h3></div>
             <div className="card" style={{ padding: 20, borderTop: '3px solid #3b82f6' }}><p style={{ fontSize: 12, color: 'var(--texto-suave)', fontWeight: 600 }}>Unidades Compradas</p><h3 style={{ fontSize: 26, fontWeight: 800, marginTop: 4 }}>{productosComprados}</h3></div>
             <div className="card" style={{ padding: 20, borderTop: '3px solid var(--naranja)' }}><p style={{ fontSize: 12, color: 'var(--texto-suave)', fontWeight: 600 }}>Productos Distintos</p><h3 style={{ fontSize: 26, fontWeight: 800, marginTop: 4, color: 'var(--naranja)' }}>{statsArray.length}</h3></div>
             <div className="card" style={{ padding: 20 }}><p style={{ fontSize: 12, color: 'var(--texto-suave)', fontWeight: 600 }}>Gasto Diario Promedio</p><h3 style={{ fontSize: 20, fontWeight: 800, marginTop: 4 }}>S/ {promedioGastoDiario.toFixed(2)}</h3></div>
           </div>
-          {/* Se conservan todas las tablas Top y Bottom aquí tal como estaban */}
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
+            {/* GRÁFICO INVERSIÓN POR DÍA */}
+            <div className="card" style={{ padding: 20 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 16 }}>Inversión por Día (S/)</h3>
+              <div style={{ height: 300 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartDiasData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eee" />
+                    <XAxis dataKey="Fecha" fontSize={11} tickMargin={10} />
+                    <YAxis fontSize={11} />
+                    <Tooltip cursor={{ fill: '#f3f4f6' }} contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }} />
+                    <Bar dataKey="Inversión" fill="#10b981" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* GRÁFICO PRODUCTOS CON MÁS INVERSIÓN */}
+            <div className="card" style={{ padding: 20 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 16 }}>Top 10 Productos (Mayor Inversión)</h3>
+              <div style={{ height: 300 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#eee" />
+                    <XAxis type="number" fontSize={11} />
+                    <YAxis dataKey="name" type="category" width={120} fontSize={10} />
+                    <Tooltip cursor={{ fill: '#f3f4f6' }} contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }} />
+                    <Bar dataKey="Inversión" fill="#D00" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
+            <div className="card" style={{ padding: 20 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, color: 'var(--naranja)' }}>🔥 Productos Más Comprados (Unidades)</h3>
+              {topComprados.map((p, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--borde)' }}>
+                  <span style={{ fontSize: 13, fontWeight: 500 }}>{p.nombre}</span><span style={{ fontSize: 13, fontWeight: 700 }}>{p.cantidad} unid.</span>
+                </div>
+              ))}
+            </div>
+            <div className="card" style={{ padding: 20 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>🧊 Productos Menos Comprados</h3>
+              {menosComprados.map((p, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--borde)' }}>
+                  <span style={{ fontSize: 13, fontWeight: 500 }}>{p.nombre}</span><span style={{ fontSize: 13, fontWeight: 700, color: 'var(--texto-suave)' }}>{p.cantidad} unid.</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* TABLA COMPARATIVA DE PRECIOS Y MÁRGENES (30%) */}
+          <div className="card" style={{ padding: 20 }}>
+            <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 16 }}>Análisis de Costos y Precios Sugeridos</h3>
+            <p style={{ fontSize: 12, color: 'var(--texto-suave)', marginBottom: 16 }}>Comparación del Costo Promedio de Compra, el Precio de Venta actual registrado en Sistema, y un Precio Sugerido (Costo + 30% de margen).</p>
+            
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse', textAlign: 'left' }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid var(--borde)' }}>
+                    <th style={{ padding: '12px 8px' }}>Producto (Almacén)</th>
+                    <th style={{ padding: '12px 8px' }}>Costo Prom. Compra</th>
+                    <th style={{ padding: '12px 8px' }}>Precio Venta (Actual)</th>
+                    <th style={{ padding: '12px 8px', color: '#10b981' }}>Precio Sugerido (+30%)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {statsArray.sort((a, b) => b.gasto - a.gasto).map(p => {
+                    // Buscar el precio de venta original en el almacén
+                    const prodAlmacen = productosDB.find(x => x.id === p.id);
+                    const precioVenta = prodAlmacen ? Number(prodAlmacen.precio || 0) : 0;
+                    const precioSugerido = p.costoPromedio * 1.30;
+                    const necesitaSubir = precioVenta < precioSugerido;
+
+                    return (
+                      <tr key={p.id} style={{ borderBottom: '1px solid var(--borde)', background: necesitaSubir ? '#fef2f2' : 'transparent' }}>
+                        <td style={{ padding: '12px 8px', fontWeight: 600 }}>{p.nombre}</td>
+                        <td style={{ padding: '12px 8px' }}>S/ {p.costoPromedio.toFixed(2)}</td>
+                        <td style={{ padding: '12px 8px', color: necesitaSubir ? '#D00' : 'inherit', fontWeight: necesitaSubir ? 700 : 400 }}>
+                          S/ {precioVenta.toFixed(2)}
+                        </td>
+                        <td style={{ padding: '12px 8px', fontWeight: 800, color: '#10b981' }}>
+                          S/ {precioSugerido.toFixed(2)}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
         </div>
       )}
     </div>
