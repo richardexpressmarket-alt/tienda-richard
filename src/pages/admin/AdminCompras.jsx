@@ -160,14 +160,12 @@ export default function AdminCompras() {
     setDatosFactura({ proveedor: '', ruc: '', tipo_comprobante: 'Factura', numero_comprobante: '', fecha: new Date().toISOString().split('T')[0], subtotal: 0, igv: 0, otros_cargos: 0, total: 0, enlace_drive: '', items: [] })
   }
 
-  // ALGORITMO INTELIGENTE DE MATCHING (Aprende del historial)
+  // ALGORITMO INTELIGENTE DE MATCHING
   const autoVincularProducto = (nombreOriginalIA) => {
-    // 1. Buscar coincidencia exacta en historial previo
     for (const compra of comprasHistorial) {
       const matchHistorial = compra.compra_items.find(i => i.nombre_original?.toLowerCase() === nombreOriginalIA.toLowerCase())
       if (matchHistorial && matchHistorial.producto_id) return matchHistorial.producto_id
     }
-    // 2. Coincidencia Parcial con productosDB
     const palabras = nombreOriginalIA.toLowerCase().split(' ')
     const coincidenciaParcial = productosDB.find(p => {
       const nombreDB = p.nombre.toLowerCase()
@@ -197,7 +195,6 @@ export default function AdminCompras() {
       const jsonLimpio = data.candidates?.[0]?.content?.parts?.[0]?.text.replace(/```json/g, '').replace(/```/g, '').trim()
       const resultado = JSON.parse(jsonLimpio)
 
-      // VERIFICACIÓN DE DUPLICADOS EN TIEMPO REAL
       const esDuplicado = comprasHistorial.some(c => c.ruc === resultado.ruc && c.numero_comprobante === resultado.numero_comprobante)
       if (esDuplicado) toast.error('¡CUIDADO! Este comprobante parece estar duplicado.', { duration: 5000 })
 
@@ -234,7 +231,6 @@ export default function AdminCompras() {
     const pendientes = datosFactura.items.filter(i => !i.producto_db_id)
     if (pendientes.length > 0 && obligarVinculacion) return toast.error('Comprobante antiguo (>3 meses). Debes vincular TODOS los productos obligatoriamente.')
     
-    // VALIDACIÓN DUPLICADOS AL GUARDAR
     const esDuplicado = comprasHistorial.some(c => c.ruc === datosFactura.ruc && c.numero_comprobante === datosFactura.numero_comprobante && c.numero_comprobante !== 'S/N')
     if (esDuplicado) {
        if(!window.confirm('ADVERTENCIA: Ya existe una boleta registrada con ese mismo RUC y Número. ¿Estás seguro de registrarla de nuevo?')) return;
@@ -242,7 +238,6 @@ export default function AdminCompras() {
 
     setCargando(true)
     try {
-      // Nota: Asegúrate de tener la columna 'tipo_comprobante' en tu tabla 'compras' en Supabase.
       const payloadCompra = { empresa: datosFactura.proveedor, ruc: datosFactura.ruc || '00000000000', tipo_comprobante: datosFactura.tipo_comprobante, subtotal: datosFactura.subtotal, igv: datosFactura.igv, otros_cargos: datosFactura.otros_cargos, total: datosFactura.total, fecha_compra: datosFactura.fecha, numero_comprobante: datosFactura.numero_comprobante || 'S/N', enlace_drive: datosFactura.enlace_drive }
       const { data: compraData, error: errCompra } = await supabase.from('compras').insert(payloadCompra).select().single()
       if (errCompra) throw errCompra
@@ -255,7 +250,6 @@ export default function AdminCompras() {
       }
       toast.success('Compra Verificada y Registrada')
       
-      // LOGICA DE COLA (Lotes)
       if (colaArchivos.length > 1 && indiceCola + 1 < colaArchivos.length) {
          saltarAlSiguienteDocumento()
       } else {
@@ -279,7 +273,6 @@ export default function AdminCompras() {
     } catch (error) { toast.error('Error: ' + error.message); } finally { setCargando(false); }
   }
 
-  // --- NUEVO: VINCULAR PENDIENTE DESDE HISTORIAL ---
   const subsanarPendiente = async (compraId, itemId, productoId, cantidad) => {
     if (!productoId) return;
     if (!window.confirm('¿Vincular este producto pendiente al almacén? Se sumará el stock correspondiente.')) return;
@@ -299,22 +292,97 @@ export default function AdminCompras() {
     }
   }
 
-  // --- LOGICA EXPORTACIÓN ---
+  // --- LOGICA EXPORTACIÓN DETALLADA ---
+
   const exportarTXT = () => {
-    let contenido = `HISTORIAL DE COMPRAS\nDesde: ${desde} - Hasta: ${hasta}\n\n`;
-    comprasFiltradasHistorial.forEach(c => { contenido += `FECHA: ${c.fecha_compra} | TIPO: ${c.tipo_comprobante || 'Factura'} | PROVEEDOR: ${c.empresa} | RUC: ${c.ruc} | COMPROBANTE: ${c.numero_comprobante} | TOTAL: S/ ${Number(c.total).toFixed(2)}\n`; })
-    const blob = new Blob([contenido], { type: 'text/plain' }); const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'historial_compras.txt'; link.click();
+    let contenido = `HISTORIAL DE COMPRAS (DETALLADO)\nDesde: ${desde} - Hasta: ${hasta}\n\n`;
+    comprasFiltradasHistorial.forEach(c => { 
+      contenido += `========================================================================\n`;
+      contenido += `FECHA: ${c.fecha_compra} | TIPO: ${c.tipo_comprobante || 'Factura'} | PROVEEDOR: ${c.empresa}\n`;
+      contenido += `RUC: ${c.ruc} | COMPROBANTE: ${c.numero_comprobante} | TOTAL PAGADO: S/ ${Number(c.total).toFixed(2)}\n`;
+      contenido += `--- DETALLE DE PRODUCTOS ---\n`;
+      if (c.compra_items && c.compra_items.length > 0) {
+        c.compra_items.forEach(i => {
+          const prodAlmacen = i.productos ? i.productos.nombre : 'PENDIENTE (NO VINCULADO)';
+          contenido += `  • Cantidad: ${i.cantidad}\n`;
+          contenido += `    Descripción Original: ${i.nombre_original}\n`;
+          contenido += `    Almacén: ${prodAlmacen}\n`;
+          contenido += `    Unitario: S/ ${Number(i.precio_unitario).toFixed(4)} | Subtotal: S/ ${Number(i.subtotal).toFixed(2)}\n\n`;
+        });
+      } else {
+        contenido += `  (Sin productos registrados en este comprobante)\n\n`;
+      }
+    })
+    const blob = new Blob([contenido], { type: 'text/plain' }); 
+    const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'historial_compras_detallado.txt'; link.click();
   }
+
   const exportarCSV = () => {
-    let contenido = `Fecha,Tipo,Proveedor,RUC,Comprobante,Total\n`;
-    comprasFiltradasHistorial.forEach(c => { contenido += `${c.fecha_compra},${c.tipo_comprobante || 'Factura'},"${c.empresa}",${c.ruc},${c.numero_comprobante},${Number(c.total).toFixed(2)}\n`; })
-    const blob = new Blob([contenido], { type: 'text/csv' }); const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'historial_compras.csv'; link.click();
+    let contenido = `Fecha Compra,Tipo,Proveedor,RUC,Nro Comprobante,Total Compra,Cant,Descripcion Original Boleta,Producto en Almacen,Precio Unitario,Subtotal Producto\n`;
+    comprasFiltradasHistorial.forEach(c => {
+      if (c.compra_items && c.compra_items.length > 0) {
+        c.compra_items.forEach(i => {
+          const prodAlmacen = i.productos ? i.productos.nombre : 'Pendiente';
+          // Se incluye todos los datos del comprobante al lado de cada producto para que en Excel se pueda filtrar o armar tablas dinámicas
+          contenido += `"${c.fecha_compra}","${c.tipo_comprobante || 'Factura'}","${c.empresa}","${c.ruc}","${c.numero_comprobante}",${Number(c.total).toFixed(2)},${i.cantidad},"${i.nombre_original}","${prodAlmacen}",${Number(i.precio_unitario).toFixed(4)},${Number(i.subtotal).toFixed(2)}\n`;
+        });
+      } else {
+        // En caso no tenga items pero sí esté la boleta
+        contenido += `"${c.fecha_compra}","${c.tipo_comprobante || 'Factura'}","${c.empresa}","${c.ruc}","${c.numero_comprobante}",${Number(c.total).toFixed(2)},,,,,\n`;
+      }
+    });
+    // Uso BOM (\uFEFF) para que Excel lea las tildes y ñ correctamente
+    const blob = new Blob(['\uFEFF' + contenido], { type: 'text/csv;charset=utf-8;' }); 
+    const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'historial_compras_detallado.csv'; link.click();
   }
+
   const exportarPDF = () => {
-    const doc = new jsPDF(); doc.text('Historial de Compras', 14, 15); doc.setFontSize(10); doc.text(`Desde: ${desde} - Hasta: ${hasta}`, 14, 22);
-    const tableData = comprasFiltradasHistorial.map(c => [c.fecha_compra, c.tipo_comprobante || 'Factura', c.empresa, c.ruc, c.numero_comprobante, `S/ ${Number(c.total).toFixed(2)}`])
-    doc.autoTable({ head: [['Fecha', 'Tipo', 'Proveedor', 'RUC', 'Comprobante', 'Total']], body: tableData, startY: 28 })
-    doc.save('historial_compras.pdf');
+    const doc = new jsPDF('landscape'); // Apaisado para que quepa más información
+    doc.text('Historial de Compras Detallado', 14, 15); 
+    doc.setFontSize(10); 
+    doc.text(`Desde: ${desde} - Hasta: ${hasta}`, 14, 22);
+    
+    const tableData = [];
+    
+    comprasFiltradasHistorial.forEach(c => {
+      // Agregamos una fila cabecera que resalta todo el comprobante
+      tableData.push([
+        { 
+          content: `COMPRA: ${c.fecha_compra} | ${c.tipo_comprobante || 'Factura'}: ${c.numero_comprobante} | PROVEEDOR: ${c.empresa} (RUC: ${c.ruc}) | TOTAL: S/ ${Number(c.total).toFixed(2)}`, 
+          colSpan: 5, 
+          styles: { fillColor: [230, 230, 230], fontStyle: 'bold', textColor: [0,0,0] } 
+        }
+      ]);
+
+      if (c.compra_items && c.compra_items.length > 0) {
+        c.compra_items.forEach(i => {
+          const prodAlmacen = i.productos ? i.productos.nombre : 'Pendiente (No vinculado)';
+          tableData.push([
+            i.cantidad.toString(),
+            i.nombre_original,
+            prodAlmacen,
+            `S/ ${Number(i.precio_unitario).toFixed(4)}`,
+            `S/ ${Number(i.subtotal).toFixed(2)}`
+          ]);
+        });
+      }
+    });
+
+    doc.autoTable({ 
+      head: [['Cant', 'Descripción Original (Boleta)', 'Vinculado a Almacén', 'P. Unitario', 'Subtotal']], 
+      body: tableData, 
+      startY: 28,
+      theme: 'grid',
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [41, 128, 185] },
+      columnStyles: {
+        0: { cellWidth: 15, halign: 'center' },
+        3: { cellWidth: 25, halign: 'right' },
+        4: { cellWidth: 25, halign: 'right' }
+      }
+    });
+    
+    doc.save('historial_compras_detallado.pdf');
   }
 
   // Cálculos Análisis
@@ -326,7 +394,6 @@ export default function AdminCompras() {
   let gastoTotal = 0; let productosComprados = 0; const productosStats = {}; const comprasPorDia = {};
   
   comprasHistorial.forEach(c => {
-    // Para gráfico de días
     const dia = c.fecha_compra;
     if (!comprasPorDia[dia]) comprasPorDia[dia] = 0;
     comprasPorDia[dia] += Number(c.total);
@@ -374,7 +441,6 @@ export default function AdminCompras() {
                    <UploadCloud size={48} style={{ margin: '0 auto 16px', color: 'var(--naranja)' }} />
                    <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>Escanear Comprobantes (Lote)</h3>
                    <p style={{ fontSize: 11, color: 'var(--texto-suave)' }}>Elige múltiples PDFs desde tu computadora o Drive Local.</p>
-                   {/* EL INPUT AHORA ACEPTA MÚLTIPLES ARCHIVOS */}
                    <input id="file-upload" type="file" multiple accept="application/pdf,image/*" style={{ display: 'none' }} onChange={handleSubirVariosPDF} />
                 </div>
                 <div className="card" style={{ width: 300, textAlign: 'center', cursor: 'pointer', padding: 40 }} onClick={iniciarModoManual}>
@@ -413,7 +479,6 @@ export default function AdminCompras() {
                       <SkipForward size={14}/> Saltar este doc
                     </button>
                   )}
-                  {/* BOTÓN PARA CANCELAR MANUAL O CUALQUIER MODO */}
                   <button onClick={resetearIngreso} className="btn-ghost" style={{ padding: '4px 12px', fontSize: 12, color: '#D00', display: 'flex', alignItems: 'center', gap: 4 }}>
                     <ArrowLeft size={14}/> Cancelar / Volver
                   </button>
@@ -542,7 +607,6 @@ export default function AdminCompras() {
                           
                           {!ocultarAlmacen && item.productos && (<div style={{ fontSize: 10, color: '#3b82f6', fontWeight: 600, marginTop: 2 }}>↳ Almacén: {item.productos.nombre}</div>)}
                           
-                          {/* SUBSANAR PENDIENTES DESDE EL HISTORIAL */}
                           {!ocultarAlmacen && !item.productos && (
                             <div className="no-print" style={{ marginTop: 6, background: '#fef3c7', padding: '6px', borderRadius: '4px', border: '1px dashed #f59e0b' }}>
                               <p style={{ fontSize: 10, color: '#d97706', fontWeight: 700, marginBottom: 4 }}>⚠️ Producto Pendiente (Subsanar):</p>
@@ -654,7 +718,6 @@ export default function AdminCompras() {
                 </thead>
                 <tbody>
                   {statsArray.sort((a, b) => b.gasto - a.gasto).map(p => {
-                    // Buscar el precio de venta original en el almacén
                     const prodAlmacen = productosDB.find(x => x.id === p.id);
                     const precioVenta = prodAlmacen ? Number(prodAlmacen.precio || 0) : 0;
                     const precioSugerido = p.costoPromedio * 1.30;
