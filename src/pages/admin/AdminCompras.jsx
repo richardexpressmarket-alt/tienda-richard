@@ -80,7 +80,7 @@ export default function AdminCompras() {
   const [modoIngreso, setModoIngreso] = useState(null) 
   const [pdfUrl, setPdfUrl] = useState('')
   const [procesandoPdf, setProcesandoPdf] = useState(false)
-  const [colaArchivos, setColaArchivos] = useState([]) // Bandeja de Verificación
+  const [colaArchivos, setColaArchivos] = useState([]) 
   const [indiceCola, setIndiceCola] = useState(0)
 
   const [datosFactura, setDatosFactura] = useState({
@@ -88,7 +88,6 @@ export default function AdminCompras() {
     subtotal: 0, igv: 0, otros_cargos: 0, total: 0, enlace_drive: '', items: []
   })
 
-  // NUEVO: Filtro para exportación e historial
   const [filtroDoc, setFiltroDoc] = useState('Todos') 
 
   const [busquedaHistorial, setBusquedaHistorial] = useState('')
@@ -99,12 +98,10 @@ export default function AdminCompras() {
   const [desde, setDesde] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split('T')[0] })
   const [hasta, setHasta] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0] })
 
-  // NUEVO: Estados para Modo Edición
   const [modalEdicion, setModalEdicion] = useState(false)
   const [compraOriginal, setCompraOriginal] = useState(null)
   const [datosEdicion, setDatosEdicion] = useState(null)
 
-  // Auto-Guardado y Carga
   useEffect(() => {
     const borrador = localStorage.getItem('borradorCompras')
     if (borrador) {
@@ -133,7 +130,6 @@ export default function AdminCompras() {
     setCargando(false)
   }
 
-  // --- LÓGICA DE LOTES Y VERIFICACIÓN ---
   const convertirPdfABase64 = (file) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader(); reader.readAsDataURL(file);
@@ -170,7 +166,6 @@ export default function AdminCompras() {
     setDatosFactura({ proveedor: '', ruc: '', tipo_comprobante: 'Factura', numero_comprobante: '', fecha: new Date().toISOString().split('T')[0], subtotal: 0, igv: 0, otros_cargos: 0, total: 0, enlace_drive: '', items: [] })
   }
 
-  // ALGORITMO INTELIGENTE DE MATCHING
   const autoVincularProducto = (nombreOriginalIA) => {
     for (const compra of comprasHistorial) {
       const matchHistorial = compra.compra_items.find(i => i.nombre_original?.toLowerCase() === nombreOriginalIA.toLowerCase())
@@ -225,20 +220,62 @@ export default function AdminCompras() {
     } catch (error) { toast.error('Error IA: ' + error.message) } finally { setProcesandoPdf(false) }
   }
 
-  // Funciones Formularios
+  // --- FUNCIONES FORMULARIO DE REGISTRO ---
   const agregarFilaManual = () => setDatosFactura(prev => ({ ...prev, items: [...prev.items, { id_temp: Date.now(), nombreOriginal: '', cantidad: 1, precio_total_linea: 0, producto_db_id: null, estado: 'pendiente' }] }))
   
-  const quitarFila = (idTemp) => { setDatosFactura(prev => { const n = prev.items.filter(i => i.id_temp !== idTemp); const s = n.reduce((acc, i) => acc + Number(i.precio_total_linea||0), 0); return { ...prev, items: n, subtotal: s }; }) }
-  const emparejarProducto = (idTemp, idDB) => setDatosFactura(prev => ({ ...prev, items: prev.items.map(i => i.id_temp === idTemp ? { ...i, producto_db_id: idDB, estado: idDB ? 'vinculado' : 'pendiente' } : i) }))
-  const cambiarDatoItem = (idTemp, c, v) => { setDatosFactura(prev => { const n = prev.items.map(i => i.id_temp === idTemp ? { ...i, [c]: v } : i); if (c === 'precio_total_linea') { const s = n.reduce((acc, i) => acc + Number(i.precio_total_linea||0), 0); return { ...prev, items: n, subtotal: s }; } return { ...prev, items: n }; }) }
-  const cambiarDatoFactura = (c, v) => { setDatosFactura(prev => { const n = { ...prev, [c]: v }; if (['igv','otros_cargos','subtotal'].includes(c)) { n.total = Number(n.subtotal||0) + Number(n.igv||0) + Number(n.otros_cargos||0); } return n; }) }
+  const quitarFila = (idTemp) => { 
+    setDatosFactura(prev => { 
+      const n = prev.items.filter(i => i.id_temp !== idTemp); 
+      const s = n.reduce((acc, i) => acc + Number(i.precio_total_linea||0), 0); 
+      const t = s + Number(prev.igv||0) + Number(prev.otros_cargos||0); // SINCRONIZA EL TOTAL
+      return { ...prev, items: n, subtotal: s, total: t }; 
+    }) 
+  }
+
+  const emparejarProducto = (idTemp, idDB) => {
+    setDatosFactura(prev => ({ 
+      ...prev, 
+      items: prev.items.map(i => {
+        if (i.id_temp !== idTemp) return i;
+        const prod = productosDB.find(p => p.id === idDB);
+        return { 
+          ...i, 
+          producto_db_id: idDB, 
+          estado: idDB ? 'vinculado' : 'pendiente',
+          // CORRECCIÓN: Autorellena el nombre de la descripción original si el usuario la dejó en blanco
+          nombreOriginal: i.nombreOriginal || (prod ? prod.nombre : '') 
+        }
+      })
+    }))
+  }
+
+  const cambiarDatoItem = (idTemp, c, v) => { 
+    setDatosFactura(prev => { 
+      const n = prev.items.map(i => i.id_temp === idTemp ? { ...i, [c]: v } : i); 
+      if (c === 'precio_total_linea') { 
+        const s = n.reduce((acc, i) => acc + Number(i.precio_total_linea||0), 0); 
+        const t = s + Number(prev.igv||0) + Number(prev.otros_cargos||0); // CORRECCIÓN: Autocalcula el Total Final siempre
+        return { ...prev, items: n, subtotal: s, total: t }; 
+      } 
+      return { ...prev, items: n }; 
+    }) 
+  }
+
+  const cambiarDatoFactura = (c, v) => { 
+    setDatosFactura(prev => { 
+      const n = { ...prev, [c]: v }; 
+      if (['igv','otros_cargos','subtotal'].includes(c)) { 
+        n.total = Number(n.subtotal||0) + Number(n.igv||0) + Number(n.otros_cargos||0); 
+      } 
+      return n; 
+    }) 
+  }
 
   const fechaFactura = new Date(datosFactura.fecha); const fechaHace3Meses = new Date(); fechaHace3Meses.setMonth(fechaHace3Meses.getMonth() - 3);
   const obligarVinculacion = fechaFactura < fechaHace3Meses;
 
   const guardarCompra = async () => {
     if (!datosFactura.proveedor) return toast.error('Falta proveedor')
-    if (!datosFactura.enlace_drive || datosFactura.enlace_drive.trim() === '') return toast.error('El enlace de Google Drive es obligatorio')
     const pendientes = datosFactura.items.filter(i => !i.producto_db_id)
     if (pendientes.length > 0 && obligarVinculacion) return toast.error('Comprobante antiguo (>3 meses). Debes vincular TODOS los productos obligatoriamente.')
     
@@ -249,19 +286,43 @@ export default function AdminCompras() {
 
     setCargando(true)
     try {
-      const payloadCompra = { empresa: datosFactura.proveedor, ruc: datosFactura.ruc || '00000000000', tipo_comprobante: datosFactura.tipo_comprobante, subtotal: datosFactura.subtotal, igv: datosFactura.igv, otros_cargos: datosFactura.otros_cargos, total: datosFactura.total, fecha_compra: datosFactura.fecha, numero_comprobante: datosFactura.numero_comprobante || 'S/N', enlace_drive: datosFactura.enlace_drive }
+      const payloadCompra = { 
+        empresa: datosFactura.proveedor, ruc: datosFactura.ruc || '00000000000', tipo_comprobante: datosFactura.tipo_comprobante, 
+        subtotal: datosFactura.subtotal, igv: datosFactura.igv, otros_cargos: datosFactura.otros_cargos, total: datosFactura.total, 
+        fecha_compra: datosFactura.fecha, numero_comprobante: datosFactura.numero_comprobante || 'S/N', enlace_drive: datosFactura.enlace_drive 
+      }
       const { data: compraData, error: errCompra } = await supabase.from('compras').insert(payloadCompra).select().single()
       if (errCompra) throw errCompra
 
       const sumaLineas = datosFactura.items.reduce((acc, i) => acc + (Number(i.precio_total_linea) || 0), 0) || 1;
       const factor = datosFactura.total > 0 ? (Number(datosFactura.total) / sumaLineas) : 1;
 
-      for (const item of datosFactura.items) {
-        const costoTotal = Number(item.precio_total_linea) * factor; const unitario = costoTotal / (Number(item.cantidad) || 1);
-        await supabase.from('compra_items').insert({ compra_id: compraData.id, producto_id: item.producto_db_id || null, nombre_original: item.nombreOriginal, cantidad: item.cantidad, precio_unitario: unitario, subtotal: costoTotal })
-        if (item.producto_db_id) { const prodDB = productosDB.find(p => p.id === item.producto_db_id); if (prodDB) await supabase.from('productos').update({ stock: prodDB.stock + Number(item.cantidad) }).eq('id', prodDB.id) }
+      // CORRECCIÓN: Preparar e insertar en bloque capturando los errores explícitamente
+      const itemsAInsertar = datosFactura.items.map(item => {
+        const costoTotal = Number(item.precio_total_linea) * factor; 
+        const unitario = costoTotal / (Number(item.cantidad) || 1);
+        return {
+          compra_id: compraData.id, 
+          producto_id: item.producto_db_id || null, 
+          nombre_original: item.nombreOriginal || (item.producto_db_id ? productosDB.find(p=>p.id === item.producto_db_id)?.nombre : 'Item Manual'), 
+          cantidad: Number(item.cantidad) || 1, 
+          precio_unitario: unitario, 
+          subtotal: costoTotal 
+        }
+      });
+
+      const { error: errItems } = await supabase.from('compra_items').insert(itemsAInsertar);
+      if (errItems) throw new Error(`Error en los productos: ${errItems.message}`);
+
+      // Solo si la inserción fue perfecta, afectamos el Almacén
+      for (const item of itemsAInsertar) {
+        if (item.producto_id) { 
+           const prodDB = productosDB.find(p => p.id === item.producto_id); 
+           if (prodDB) await supabase.from('productos').update({ stock: prodDB.stock + Number(item.cantidad) }).eq('id', prodDB.id); 
+        }
       }
-      toast.success('Compra Verificada y Registrada con Costos Correctos')
+
+      toast.success('Compra Verificada y Registrada con Éxito')
       
       if (colaArchivos.length > 1 && indiceCola + 1 < colaArchivos.length) {
          saltarAlSiguienteDocumento()
@@ -289,7 +350,7 @@ export default function AdminCompras() {
     } catch (error) { toast.error('Error: ' + error.message); } finally { setCargando(false); }
   }
 
-  // --- NUEVA SECCIÓN DE EDICIÓN DE COMPRA ---
+  // --- SECCIÓN DE EDICIÓN DE COMPRA (CORREGIDA) ---
   const abrirEdicion = (compra) => {
     setCompraOriginal(compra);
     setDatosEdicion({
@@ -325,27 +386,45 @@ export default function AdminCompras() {
         return n; 
      }) 
   }
+
   const cambiarDatoItemEdicion = (idTemp, c, v) => { 
      setDatosEdicion(prev => { 
         const n = prev.items.map(i => i.id_temp === idTemp ? { ...i, [c]: v } : i); 
         if (c === 'precio_total_linea') { 
            const s = n.reduce((acc, i) => acc + Number(i.precio_total_linea||0), 0); 
-           return { ...prev, items: n, subtotal: s }; 
+           const t = s + Number(prev.igv||0) + Number(prev.otros_cargos||0); // SINCRONIZA EL TOTAL
+           return { ...prev, items: n, subtotal: s, total: t }; 
         } 
         return { ...prev, items: n }; 
      }) 
   }
+
   const emparejarProductoEdicion = (idTemp, idDB) => {
-     setDatosEdicion(prev => ({ ...prev, items: prev.items.map(i => i.id_temp === idTemp ? { ...i, producto_db_id: idDB, estado: idDB ? 'vinculado' : 'pendiente' } : i) }))
+    setDatosEdicion(prev => ({ 
+      ...prev, 
+      items: prev.items.map(i => {
+        if (i.id_temp !== idTemp) return i;
+        const prod = productosDB.find(p => p.id === idDB);
+        return { 
+          ...i, 
+          producto_db_id: idDB, 
+          estado: idDB ? 'vinculado' : 'pendiente',
+          nombreOriginal: i.nombreOriginal || (prod ? prod.nombre : '') // AUTORELLENO AYUDA
+        }
+      })
+    }))
   }
+
   const agregarFilaEdicion = () => {
      setDatosEdicion(prev => ({ ...prev, items: [...prev.items, { id_temp: Date.now(), nombreOriginal: '', cantidad: 1, precio_total_linea: 0, producto_db_id: null, estado: 'pendiente' }] }))
   }
+
   const quitarFilaEdicion = (idTemp) => { 
      setDatosEdicion(prev => { 
         const n = prev.items.filter(i => i.id_temp !== idTemp); 
         const s = n.reduce((acc, i) => acc + Number(i.precio_total_linea||0), 0); 
-        return { ...prev, items: n, subtotal: s }; 
+        const t = s + Number(prev.igv||0) + Number(prev.otros_cargos||0); // SINCRONIZA
+        return { ...prev, items: n, subtotal: s, total: t }; 
      }) 
   }
 
@@ -353,7 +432,7 @@ export default function AdminCompras() {
     if (!datosEdicion.proveedor) return toast.error('Falta proveedor')
     setCargando(true)
     try {
-      // 1. REVERTIR STOCK ANTERIOR
+      // 1. REVERTIR STOCK ANTERIOR ALMACÉN
       for (const old of compraOriginal.compra_items) {
         if (old.producto_id) {
            const { data: pData } = await supabase.from('productos').select('stock').eq('id', old.producto_id).single();
@@ -379,26 +458,32 @@ export default function AdminCompras() {
       };
       await supabase.from('compras').update(payloadUpdate).eq('id', compraOriginal.id);
       
-      // 4. INSERTAR ITEMS NUEVOS Y SUMAR STOCK NUEVO
+      // 4. PREPARAR ITEMS NUEVOS (CORREGIDO PARA EVITAR BORRADO SILENCIOSO)
       const sumaLineas = datosEdicion.items.reduce((acc, i) => acc + (Number(i.precio_total_linea) || 0), 0) || 1;
       const factor = datosEdicion.total > 0 ? (Number(datosEdicion.total) / sumaLineas) : 1;
       
-      for (const item of datosEdicion.items) {
+      const itemsAInsertar = datosEdicion.items.map(item => {
         const costoTotal = Number(item.precio_total_linea) * factor; 
         const unitario = costoTotal / (Number(item.cantidad) || 1);
-        
-        await supabase.from('compra_items').insert({ 
+        return {
           compra_id: compraOriginal.id, 
           producto_id: item.producto_db_id || null, 
-          nombre_original: item.nombreOriginal, 
-          cantidad: item.cantidad, 
+          nombre_original: item.nombreOriginal || (item.producto_db_id ? productosDB.find(p=>p.id === item.producto_db_id)?.nombre : 'Item Editado'), 
+          cantidad: Number(item.cantidad) || 1, 
           precio_unitario: unitario, 
           subtotal: costoTotal 
-        });
-        
-        if (item.producto_db_id) { 
-           const { data: pData } = await supabase.from('productos').select('stock').eq('id', item.producto_db_id).single();
-           if (pData) await supabase.from('productos').update({ stock: pData.stock + Number(item.cantidad) }).eq('id', item.producto_db_id);
+        }
+      });
+
+      // Insertar chequeando el error exacto
+      const { error: errItems } = await supabase.from('compra_items').insert(itemsAInsertar);
+      if (errItems) throw new Error(`Error en los productos al editar: ${errItems.message}`);
+      
+      // 5. SUMAR STOCK NUEVO SI LA INSERCIÓN FUE EXITOSA
+      for (const item of itemsAInsertar) {
+        if (item.producto_id) { 
+           const { data: pData } = await supabase.from('productos').select('stock').eq('id', item.producto_id).single();
+           if (pData) await supabase.from('productos').update({ stock: pData.stock + Number(item.cantidad) }).eq('id', item.producto_id);
         }
       }
       
@@ -661,7 +746,7 @@ export default function AdminCompras() {
                         {modoIngreso === 'manual' && datosFactura.items.length > 1 && <button onClick={() => quitarFila(item.id_temp)} style={{ position: 'absolute', top: 8, right: 8, background: 'none', border: 'none', color: '#D00', cursor: 'pointer', fontSize: 12 }}>X</button>}
                         <div style={{ marginBottom: 12 }}>
                            <label style={{ fontSize: 10, color: 'var(--texto-suave)' }}>Descripción Original (Boleta):</label>
-                           <input type="text" value={item.nombreOriginal} onChange={e => cambiarDatoItem(item.id_temp, 'nombreOriginal', e.target.value)} style={{ width: '100%', fontSize: 13, fontWeight: 600, padding: '4px 8px', border: '1px solid var(--borde)', borderRadius: 4 }} />
+                           <input type="text" value={item.nombreOriginal} onChange={e => cambiarDatoItem(item.id_temp, 'nombreOriginal', e.target.value)} style={{ width: '100%', fontSize: 13, fontWeight: 600, padding: '4px 8px', border: '1px solid var(--borde)', borderRadius: 4 }} placeholder="Ejem: ACEITE PRIMOR 1L" />
                         </div>
                         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
                           <BuscadorProductos item={item} productosDB={productosDB} onSelect={(id) => emparejarProducto(item.id_temp, id)} />
@@ -709,7 +794,6 @@ export default function AdminCompras() {
                 <input type="date" value={desde} onChange={e => setDesde(e.target.value)} style={{ flex: 1, padding: '6px 10px', fontSize: 12 }} />
                 <input type="date" value={hasta} onChange={e => setHasta(e.target.value)} style={{ flex: 1, padding: '6px 10px', fontSize: 12 }} />
               </div>
-              {/* BOTONES EXPORTAR TABLA CON FILTRO NUEVO */}
               <div style={{ display: 'flex', gap: 8, width: '100%', justifyContent: 'flex-end', alignItems: 'center' }}>
                  <select value={filtroDoc} onChange={e => setFiltroDoc(e.target.value)} style={{ padding: '4px 8px', fontSize: 11, borderRadius: 4, border: '1px solid var(--borde)' }}>
                     <option value="Todos">Todos (Factura y Boleta)</option>
@@ -737,7 +821,6 @@ export default function AdminCompras() {
               <div id="zona-impresion" style={{ background: '#fff', borderRadius: 12, boxShadow: '0 10px 25px rgba(0,0,0,0.1)', padding: 32, fontFamily: '"Courier New", Courier, monospace', border: '1px solid #e5e7eb', position: 'relative' }}>
                 <div className="no-print" style={{ position: 'absolute', top: 16, right: 16, display: 'flex', gap: 8, alignItems: 'center' }}>
                    <button onClick={() => eliminarCompra(compraActiva.id)} className="btn-ghost" title="Eliminar Registro Completamente" style={{ padding: 8, color: '#ef4444', border: '1px solid #fee2e2', background: '#fef2f2' }}><Trash2 size={16} /></button>
-                   {/* NUEVO: Botón Editar */}
                    <button onClick={() => abrirEdicion(compraActiva)} className="btn-ghost" title="Editar Comprobante" style={{ padding: 8, color: '#f59e0b', border: '1px solid #fef3c7', background: '#fffbeb' }}><Edit3 size={16} /></button>
                    <button onClick={() => setOcultarAlmacen(!ocultarAlmacen)} className="btn-ghost" title="Ocultar/Mostrar vinculación de Almacén" style={{ padding: 8 }}>{ocultarAlmacen ? <EyeOff size={16} color="var(--texto-suave)" /> : <Eye size={16} color="#3b82f6" />}</button>
                    <button onClick={() => window.print()} className="btn-primary" style={{ padding: 8, background: '#111827', color: '#fff' }}><Printer size={16} /> Imprimir Doc.</button>
@@ -755,7 +838,6 @@ export default function AdminCompras() {
                           
                           {!ocultarAlmacen && item.productos && (<div style={{ fontSize: 10, color: '#3b82f6', fontWeight: 600, marginTop: 2 }}>↳ Almacén: {item.productos.nombre}</div>)}
                           
-                          {/* SUBSANAR PENDIENTES DESDE EL HISTORIAL */}
                           {!ocultarAlmacen && !item.productos && (
                             <div className="no-print" style={{ marginTop: 6, background: '#fef3c7', padding: '6px', borderRadius: '4px', border: '1px dashed #f59e0b' }}>
                               <p style={{ fontSize: 10, color: '#d97706', fontWeight: 700, marginBottom: 4 }}>⚠️ Producto Pendiente (Subsanar):</p>
@@ -787,7 +869,6 @@ export default function AdminCompras() {
               <Search size={16} style={{ position: 'absolute', left: 12, top: 10, color: 'var(--texto-suave)' }} />
               <input type="text" placeholder="🔍 Filtrar métricas por producto..." value={busquedaAnalisis} onChange={(e) => setBusquedaAnalisis(e.target.value)} style={{ width: '100%', padding: '8px 12px 8px 36px', fontSize: 13, borderRadius: 8, border: '1px solid var(--borde)' }} />
             </div>
-            {/* NUEVO FILTRO PARA ANÁLISIS TAMBIÉN */}
             <select value={filtroDoc} onChange={e => setFiltroDoc(e.target.value)} style={{ padding: '6px 10px', fontSize: 12, borderRadius: 8, border: '1px solid var(--borde)' }}>
               <option value="Todos">Todos (Factura y Boleta)</option>
               <option value="Factura">Solo Facturas</option>
