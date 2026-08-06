@@ -19,6 +19,10 @@ const estilosImpresion = `
     #zona-impresion, #zona-impresion * { visibility: visible; }
     #zona-impresion { position: absolute; left: 0; top: 0; width: 100%; padding: 20px; border: none !important; box-shadow: none !important; }
     .no-print { display: none !important; }
+    .solo-print { display: block !important; }
+  }
+  @media screen {
+    .solo-print { display: none !important; }
   }
 `;
 
@@ -76,12 +80,13 @@ export default function AdminCompras() {
   const [productosDB, setProductosDB] = useState([])
   const [comprasHistorial, setComprasHistorial] = useState([])
   
-  // Estados Registro y Lotes (Bandeja)
+  // Estados Registro y Lotes
   const [modoIngreso, setModoIngreso] = useState(null) 
   const [pdfUrl, setPdfUrl] = useState('')
   const [procesandoPdf, setProcesandoPdf] = useState(false)
   const [colaArchivos, setColaArchivos] = useState([]) 
   const [indiceCola, setIndiceCola] = useState(0)
+  const [isDragging, setIsDragging] = useState(false)
 
   const [datosFactura, setDatosFactura] = useState({
     proveedor: '', ruc: '', tipo_comprobante: 'Factura', numero_comprobante: '', fecha: new Date().toISOString().split('T')[0], 
@@ -130,6 +135,20 @@ export default function AdminCompras() {
     setCargando(false)
   }
 
+  // --- LÓGICA DE DRAG & DROP Y LOTES ---
+  const handleDragOver = (e) => { e.preventDefault(); setIsDragging(true); }
+  const handleDragLeave = () => { setIsDragging(false); }
+  const handleDrop = async (e) => {
+    e.preventDefault(); setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const files = Array.from(e.dataTransfer.files);
+      setModoIngreso('ia');
+      setColaArchivos(files);
+      setIndiceCola(0);
+      await procesarDocumentoConGemini(files[0]);
+    }
+  }
+
   const convertirPdfABase64 = (file) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader(); reader.readAsDataURL(file);
@@ -158,7 +177,7 @@ export default function AdminCompras() {
 
   const iniciarModoManual = () => {
     setPdfUrl(''); setModoIngreso('manual'); setColaArchivos([])
-    setDatosFactura({ proveedor: '', ruc: '', tipo_comprobante: 'Factura', numero_comprobante: '', fecha: new Date().toISOString().split('T')[0], subtotal: 0, igv: 0, otros_cargos: 0, total: 0, enlace_drive: '', items: [{ id_temp: Date.now(), nombreOriginal: '', cantidad: 1, precio_total_linea: 0, producto_db_id: null, estado: 'pendiente' }] })
+    setDatosFactura({ proveedor: '', ruc: '', tipo_comprobante: 'Factura', numero_comprobante: '', fecha: new Date().toISOString().split('T')[0], subtotal: 0, igv: 0, otros_cargos: 0, total: 0, enlace_drive: '', items: [{ id_temp: Date.now(), nombreOriginal: '', cantidad: '', precio_total_linea: 0, producto_db_id: null, estado: 'pendiente' }] })
   }
 
   const resetearIngreso = () => {
@@ -206,7 +225,8 @@ export default function AdminCompras() {
       const itemsProcesados = (resultado.items || []).map(item => {
         const idVinculado = autoVincularProducto(item.nombreOriginal)
         return {
-          id_temp: Date.now() + Math.random(), nombreOriginal: item.nombreOriginal, cantidad: Number(item.cantidad) || 1,
+          id_temp: Date.now() + Math.random(), nombreOriginal: item.nombreOriginal, 
+          cantidad: item.cantidad !== undefined ? Number(item.cantidad) : 1,
           precio_total_linea: Number(item.precio_total_linea) || 0, producto_db_id: idVinculado, estado: idVinculado ? 'vinculado' : 'pendiente'
         }
       })
@@ -221,13 +241,13 @@ export default function AdminCompras() {
   }
 
   // --- FUNCIONES FORMULARIO DE REGISTRO ---
-  const agregarFilaManual = () => setDatosFactura(prev => ({ ...prev, items: [...prev.items, { id_temp: Date.now(), nombreOriginal: '', cantidad: 1, precio_total_linea: 0, producto_db_id: null, estado: 'pendiente' }] }))
+  const agregarFilaManual = () => setDatosFactura(prev => ({ ...prev, items: [...prev.items, { id_temp: Date.now(), nombreOriginal: '', cantidad: '', precio_total_linea: 0, producto_db_id: null, estado: 'pendiente' }] }))
   
   const quitarFila = (idTemp) => { 
     setDatosFactura(prev => { 
       const n = prev.items.filter(i => i.id_temp !== idTemp); 
       const s = n.reduce((acc, i) => acc + Number(i.precio_total_linea||0), 0); 
-      const t = s + Number(prev.igv||0) + Number(prev.otros_cargos||0); // SINCRONIZA EL TOTAL
+      const t = s + Number(prev.igv||0) + Number(prev.otros_cargos||0); 
       return { ...prev, items: n, subtotal: s, total: t }; 
     }) 
   }
@@ -242,7 +262,6 @@ export default function AdminCompras() {
           ...i, 
           producto_db_id: idDB, 
           estado: idDB ? 'vinculado' : 'pendiente',
-          // CORRECCIÓN: Autorellena el nombre de la descripción original si el usuario la dejó en blanco
           nombreOriginal: i.nombreOriginal || (prod ? prod.nombre : '') 
         }
       })
@@ -254,7 +273,7 @@ export default function AdminCompras() {
       const n = prev.items.map(i => i.id_temp === idTemp ? { ...i, [c]: v } : i); 
       if (c === 'precio_total_linea') { 
         const s = n.reduce((acc, i) => acc + Number(i.precio_total_linea||0), 0); 
-        const t = s + Number(prev.igv||0) + Number(prev.otros_cargos||0); // CORRECCIÓN: Autocalcula el Total Final siempre
+        const t = s + Number(prev.igv||0) + Number(prev.otros_cargos||0); 
         return { ...prev, items: n, subtotal: s, total: t }; 
       } 
       return { ...prev, items: n }; 
@@ -271,13 +290,13 @@ export default function AdminCompras() {
     }) 
   }
 
-  const fechaFactura = new Date(datosFactura.fecha); const fechaHace3Meses = new Date(); fechaHace3Meses.setMonth(fechaHace3Meses.getMonth() - 3);
-  const obligarVinculacion = fechaFactura < fechaHace3Meses;
+  // LÓGICA DE 3 MESES (SIN BLOQUEAR)
+  const fechaFactura = new Date(datosFactura.fecha); 
+  const fechaHace3Meses = new Date(); fechaHace3Meses.setMonth(fechaHace3Meses.getMonth() - 3);
+  const esAntiguo = fechaFactura < fechaHace3Meses; 
 
   const guardarCompra = async () => {
     if (!datosFactura.proveedor) return toast.error('Falta proveedor')
-    const pendientes = datosFactura.items.filter(i => !i.producto_db_id)
-    if (pendientes.length > 0 && obligarVinculacion) return toast.error('Comprobante antiguo (>3 meses). Debes vincular TODOS los productos obligatoriamente.')
     
     const esDuplicado = comprasHistorial.some(c => c.ruc === datosFactura.ruc && c.numero_comprobante === datosFactura.numero_comprobante && c.numero_comprobante !== 'S/N')
     if (esDuplicado) {
@@ -297,15 +316,16 @@ export default function AdminCompras() {
       const sumaLineas = datosFactura.items.reduce((acc, i) => acc + (Number(i.precio_total_linea) || 0), 0) || 1;
       const factor = datosFactura.total > 0 ? (Number(datosFactura.total) / sumaLineas) : 1;
 
-      // CORRECCIÓN: Preparar e insertar en bloque capturando los errores explícitamente
       const itemsAInsertar = datosFactura.items.map(item => {
+        const qty = Number(item.cantidad) || 0; 
         const costoTotal = Number(item.precio_total_linea) * factor; 
-        const unitario = costoTotal / (Number(item.cantidad) || 1);
+        const unitario = qty > 0 ? (costoTotal / qty) : 0; 
+        
         return {
           compra_id: compraData.id, 
           producto_id: item.producto_db_id || null, 
           nombre_original: item.nombreOriginal || (item.producto_db_id ? productosDB.find(p=>p.id === item.producto_db_id)?.nombre : 'Item Manual'), 
-          cantidad: Number(item.cantidad) || 1, 
+          cantidad: qty, 
           precio_unitario: unitario, 
           subtotal: costoTotal 
         }
@@ -314,15 +334,14 @@ export default function AdminCompras() {
       const { error: errItems } = await supabase.from('compra_items').insert(itemsAInsertar);
       if (errItems) throw new Error(`Error en los productos: ${errItems.message}`);
 
-      // Solo si la inserción fue perfecta, afectamos el Almacén
       for (const item of itemsAInsertar) {
-        if (item.producto_id) { 
+        if (item.producto_id && item.cantidad > 0) { 
            const prodDB = productosDB.find(p => p.id === item.producto_id); 
-           if (prodDB) await supabase.from('productos').update({ stock: prodDB.stock + Number(item.cantidad) }).eq('id', prodDB.id); 
+           if (prodDB) await supabase.from('productos').update({ stock: prodDB.stock + item.cantidad }).eq('id', prodDB.id); 
         }
       }
 
-      toast.success('Compra Verificada y Registrada con Éxito')
+      toast.success('Compra Registrada con Éxito')
       
       if (colaArchivos.length > 1 && indiceCola + 1 < colaArchivos.length) {
          saltarAlSiguienteDocumento()
@@ -339,7 +358,7 @@ export default function AdminCompras() {
       const c = comprasHistorial.find(x => x.id === id);
       if (c && c.compra_items) {
         for (const i of c.compra_items) {
-          if (i.producto_id) { 
+          if (i.producto_id && Number(i.cantidad) > 0) { 
              const { data: dbProd } = await supabase.from('productos').select('stock').eq('id', i.producto_id).single();
              if (dbProd) await supabase.from('productos').update({ stock: dbProd.stock - Number(i.cantidad) }).eq('id', i.producto_id); 
           }
@@ -350,7 +369,7 @@ export default function AdminCompras() {
     } catch (error) { toast.error('Error: ' + error.message); } finally { setCargando(false); }
   }
 
-  // --- SECCIÓN DE EDICIÓN DE COMPRA (CORREGIDA) ---
+  // --- SECCIÓN DE EDICIÓN DE COMPRA ---
   const abrirEdicion = (compra) => {
     setCompraOriginal(compra);
     setDatosEdicion({
@@ -368,7 +387,7 @@ export default function AdminCompras() {
       items: compra.compra_items.map(i => ({
         id_temp: i.id || Date.now() + Math.random(), 
         nombreOriginal: i.nombre_original || '',
-        cantidad: i.cantidad || 1,
+        cantidad: i.cantidad,
         precio_total_linea: i.subtotal || 0,
         producto_db_id: i.producto_id,
         estado: i.producto_id ? 'vinculado' : 'pendiente'
@@ -392,7 +411,7 @@ export default function AdminCompras() {
         const n = prev.items.map(i => i.id_temp === idTemp ? { ...i, [c]: v } : i); 
         if (c === 'precio_total_linea') { 
            const s = n.reduce((acc, i) => acc + Number(i.precio_total_linea||0), 0); 
-           const t = s + Number(prev.igv||0) + Number(prev.otros_cargos||0); // SINCRONIZA EL TOTAL
+           const t = s + Number(prev.igv||0) + Number(prev.otros_cargos||0); 
            return { ...prev, items: n, subtotal: s, total: t }; 
         } 
         return { ...prev, items: n }; 
@@ -409,21 +428,21 @@ export default function AdminCompras() {
           ...i, 
           producto_db_id: idDB, 
           estado: idDB ? 'vinculado' : 'pendiente',
-          nombreOriginal: i.nombreOriginal || (prod ? prod.nombre : '') // AUTORELLENO AYUDA
+          nombreOriginal: i.nombreOriginal || (prod ? prod.nombre : '')
         }
       })
     }))
   }
 
   const agregarFilaEdicion = () => {
-     setDatosEdicion(prev => ({ ...prev, items: [...prev.items, { id_temp: Date.now(), nombreOriginal: '', cantidad: 1, precio_total_linea: 0, producto_db_id: null, estado: 'pendiente' }] }))
+     setDatosEdicion(prev => ({ ...prev, items: [...prev.items, { id_temp: Date.now(), nombreOriginal: '', cantidad: '', precio_total_linea: 0, producto_db_id: null, estado: 'pendiente' }] }))
   }
 
   const quitarFilaEdicion = (idTemp) => { 
      setDatosEdicion(prev => { 
         const n = prev.items.filter(i => i.id_temp !== idTemp); 
         const s = n.reduce((acc, i) => acc + Number(i.precio_total_linea||0), 0); 
-        const t = s + Number(prev.igv||0) + Number(prev.otros_cargos||0); // SINCRONIZA
+        const t = s + Number(prev.igv||0) + Number(prev.otros_cargos||0); 
         return { ...prev, items: n, subtotal: s, total: t }; 
      }) 
   }
@@ -432,18 +451,15 @@ export default function AdminCompras() {
     if (!datosEdicion.proveedor) return toast.error('Falta proveedor')
     setCargando(true)
     try {
-      // 1. REVERTIR STOCK ANTERIOR ALMACÉN
       for (const old of compraOriginal.compra_items) {
-        if (old.producto_id) {
+        if (old.producto_id && Number(old.cantidad) > 0) {
            const { data: pData } = await supabase.from('productos').select('stock').eq('id', old.producto_id).single();
            if (pData) await supabase.from('productos').update({ stock: pData.stock - Number(old.cantidad) }).eq('id', old.producto_id);
         }
       }
       
-      // 2. ELIMINAR ITEMS ANTIGUOS
       await supabase.from('compra_items').delete().eq('compra_id', compraOriginal.id);
       
-      // 3. ACTUALIZAR COMPROBANTE PRINCIPAL
       const payloadUpdate = {
         empresa: datosEdicion.proveedor,
         ruc: datosEdicion.ruc || '00000000000',
@@ -458,32 +474,30 @@ export default function AdminCompras() {
       };
       await supabase.from('compras').update(payloadUpdate).eq('id', compraOriginal.id);
       
-      // 4. PREPARAR ITEMS NUEVOS (CORREGIDO PARA EVITAR BORRADO SILENCIOSO)
       const sumaLineas = datosEdicion.items.reduce((acc, i) => acc + (Number(i.precio_total_linea) || 0), 0) || 1;
       const factor = datosEdicion.total > 0 ? (Number(datosEdicion.total) / sumaLineas) : 1;
       
       const itemsAInsertar = datosEdicion.items.map(item => {
+        const qty = Number(item.cantidad) || 0;
         const costoTotal = Number(item.precio_total_linea) * factor; 
-        const unitario = costoTotal / (Number(item.cantidad) || 1);
+        const unitario = qty > 0 ? (costoTotal / qty) : 0;
         return {
           compra_id: compraOriginal.id, 
           producto_id: item.producto_db_id || null, 
           nombre_original: item.nombreOriginal || (item.producto_db_id ? productosDB.find(p=>p.id === item.producto_db_id)?.nombre : 'Item Editado'), 
-          cantidad: Number(item.cantidad) || 1, 
+          cantidad: qty, 
           precio_unitario: unitario, 
           subtotal: costoTotal 
         }
       });
 
-      // Insertar chequeando el error exacto
       const { error: errItems } = await supabase.from('compra_items').insert(itemsAInsertar);
       if (errItems) throw new Error(`Error en los productos al editar: ${errItems.message}`);
       
-      // 5. SUMAR STOCK NUEVO SI LA INSERCIÓN FUE EXITOSA
       for (const item of itemsAInsertar) {
-        if (item.producto_id) { 
+        if (item.producto_id && item.cantidad > 0) { 
            const { data: pData } = await supabase.from('productos').select('stock').eq('id', item.producto_id).single();
-           if (pData) await supabase.from('productos').update({ stock: pData.stock + Number(item.cantidad) }).eq('id', item.producto_id);
+           if (pData) await supabase.from('productos').update({ stock: pData.stock + item.cantidad }).eq('id', item.producto_id);
         }
       }
       
@@ -501,15 +515,16 @@ export default function AdminCompras() {
 
   const subsanarPendiente = async (compraId, itemId, productoId, cantidad) => {
     if (!productoId) return;
-    if (!window.confirm('¿Vincular este producto pendiente al almacén? Se sumará el stock correspondiente.')) return;
+    if (!window.confirm('¿Vincular este producto pendiente al almacén? Se sumará el stock correspondiente si la cantidad es mayor a 0.')) return;
     setCargando(true);
     try {
       await supabase.from('compra_items').update({ producto_id: productoId }).eq('id', itemId);
       const prod = productosDB.find(p => p.id === productoId);
-      if (prod) {
-        await supabase.from('productos').update({ stock: prod.stock + Number(cantidad) }).eq('id', productoId);
+      const cant = Number(cantidad) || 0;
+      if (prod && cant > 0) {
+        await supabase.from('productos').update({ stock: prod.stock + cant }).eq('id', productoId);
       }
-      toast.success('Producto vinculado y stock actualizado correctamente.');
+      toast.success('Producto vinculado correctamente.');
       cargarHistorial(); cargarProductos();
     } catch (error) {
       toast.error('Error al vincular: ' + error.message);
@@ -628,9 +643,17 @@ export default function AdminCompras() {
       const p = i.productos 
       if (p) {
         if (busquedaAnalisis && !p.nombre.toLowerCase().includes(busquedaAnalisis.toLowerCase())) return;
-        const cant = Number(i.cantidad||0); const gasto = cant * Number(i.precio_unitario); productosComprados += cant; gastoTotal += gasto
+        const cant = Number(i.cantidad||0); 
+        
+        if (cant === 0) return; 
+
+        const gasto = cant * Number(i.precio_unitario); 
+        productosComprados += cant; 
+        gastoTotal += gasto;
+
         if (!productosStats[i.producto_id]) productosStats[i.producto_id] = { id: i.producto_id, nombre: p.nombre, cantidad: 0, gasto: 0 }; 
-        productosStats[i.producto_id].cantidad += cant; productosStats[i.producto_id].gasto += gasto
+        productosStats[i.producto_id].cantidad += cant; 
+        productosStats[i.producto_id].gasto += gasto;
       }
     })
   })
@@ -643,6 +666,11 @@ export default function AdminCompras() {
   const menosComprados = [...statsArray].sort((a, b) => a.cantidad - b.cantidad).slice(0, 5); 
   
   const compraActiva = comprasHistorial.find(c => c.id === compraExpandida)
+
+  // LOGICA PARA MOSTRAR/OCULTAR SUBSANAR SEGÚN FECHA
+  const fechaCompraActiva = compraActiva ? new Date(compraActiva.fecha_compra) : new Date();
+  const fechaHace3MesesActiva = new Date(); fechaHace3MesesActiva.setMonth(fechaHace3MesesActiva.getMonth() - 3);
+  const esActivaAntigua = fechaCompraActiva < fechaHace3MesesActiva;
 
   return (
     <div>
@@ -661,15 +689,25 @@ export default function AdminCompras() {
         <div className="no-print" style={{ display: 'grid', gridTemplateColumns: modoIngreso === 'ia' ? '1fr 1fr' : '1fr', gap: 20, minHeight: 'calc(100vh - 120px)' }}>
           {!modoIngreso && (
             <div style={{ display: 'flex', gap: 20, justifyContent: 'center', alignItems: 'center', flexDirection: 'column' }}>
-              <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16 }}>Bandeja de Subida (Selecciona 1 o Varios)</h2>
+              <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16 }}>Bandeja de Subida (Arrastra o Selecciona)</h2>
               <div style={{ display: 'flex', gap: 20 }}>
-                <div className="card" style={{ width: 300, textAlign: 'center', cursor: 'pointer', padding: 40 }} onClick={() => document.getElementById('file-upload').click()}>
+                <div 
+                  className="card" 
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onClick={() => document.getElementById('file-upload').click()}
+                  style={{ 
+                    width: 300, textAlign: 'center', cursor: 'pointer', padding: 40, 
+                    border: isDragging ? '2px dashed var(--naranja)' : '2px dashed transparent',
+                    background: isDragging ? '#f59e0b10' : 'var(--fondo)'
+                  }}>
                    <UploadCloud size={48} style={{ margin: '0 auto 16px', color: 'var(--naranja)' }} />
-                   <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>Escanear Comprobantes (Lote)</h3>
-                   <p style={{ fontSize: 11, color: 'var(--texto-suave)' }}>Elige múltiples PDFs desde tu computadora o Drive Local.</p>
+                   <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>Escanear Comprobantes</h3>
+                   <p style={{ fontSize: 11, color: 'var(--texto-suave)' }}>Arrastra tus PDFs aquí o haz clic para seleccionar archivos desde tu PC o Drive.</p>
                    <input id="file-upload" type="file" multiple accept="application/pdf,image/*" style={{ display: 'none' }} onChange={handleSubirVariosPDF} />
                 </div>
-                <div className="card" style={{ width: 300, textAlign: 'center', cursor: 'pointer', padding: 40 }} onClick={iniciarModoManual}>
+                <div className="card" style={{ width: 300, textAlign: 'center', cursor: 'pointer', padding: 40, border: '2px dashed transparent' }} onClick={iniciarModoManual}>
                    <Edit3 size={48} style={{ margin: '0 auto 16px', color: '#10b981' }} />
                    <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>Ingreso Manual Único</h3>
                 </div>
@@ -729,7 +767,11 @@ export default function AdminCompras() {
                           <option value="Otro">Otro</option>
                         </select>
                       </div>
-                      <div><label style={{ fontSize: 11, fontWeight: 600 }}>Fecha</label><input type="date" value={datosFactura.fecha} onChange={e => cambiarDatoFactura('fecha', e.target.value)} style={{ width: '100%', fontSize: 13, color: obligarVinculacion ? '#D00' : 'inherit' }} />{obligarVinculacion && <p style={{ fontSize: 10, color: '#D00' }}>+3 meses (Vinculación Obligatoria)</p>}</div>
+                      <div>
+                        <label style={{ fontSize: 11, fontWeight: 600 }}>Fecha</label>
+                        <input type="date" value={datosFactura.fecha} onChange={e => cambiarDatoFactura('fecha', e.target.value)} style={{ width: '100%', fontSize: 13, color: esAntiguo ? '#6b7280' : 'inherit' }} />
+                        {esAntiguo && <p style={{ fontSize: 10, color: 'var(--texto-suave)', marginTop: 4 }}>+3 meses (Registro Histórico)</p>}
+                      </div>
                       <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: 11, fontWeight: 600 }}>Proveedor / Empresa</label><input type="text" value={datosFactura.proveedor} onChange={e => cambiarDatoFactura('proveedor', e.target.value)} style={{ width: '100%', fontSize: 13 }} /></div>
                       <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: 11, fontWeight: 600 }}>N° Boleta/Factura</label><input type="text" value={datosFactura.numero_comprobante} onChange={e => cambiarDatoFactura('numero_comprobante', e.target.value)} style={{ width: '100%', fontSize: 13 }} /></div>
                     </div>
@@ -740,7 +782,9 @@ export default function AdminCompras() {
                     </div>
                       
                     {datosFactura.items.map((item) => {
-                      const unitarioDerivado = (Number(item.precio_total_linea) / (Number(item.cantidad) || 1)).toFixed(4)
+                      const qty = Number(item.cantidad) || 0;
+                      const unitarioDerivado = qty > 0 ? (Number(item.precio_total_linea) / qty).toFixed(4) : '0.0000';
+                      
                       return (
                       <div key={item.id_temp} style={{ padding: 12, border: `1px solid ${item.estado === 'vinculado' ? '#10b981' : '#f59e0b'}`, borderRadius: 8, marginBottom: 12, background: item.estado === 'vinculado' ? '#10b98108' : '#f59e0b08', position: 'relative' }}>
                         {modoIngreso === 'manual' && datosFactura.items.length > 1 && <button onClick={() => quitarFila(item.id_temp)} style={{ position: 'absolute', top: 8, right: 8, background: 'none', border: 'none', color: '#D00', cursor: 'pointer', fontSize: 12 }}>X</button>}
@@ -750,10 +794,17 @@ export default function AdminCompras() {
                         </div>
                         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
                           <BuscadorProductos item={item} productosDB={productosDB} onSelect={(id) => emparejarProducto(item.id_temp, id)} />
-                          {item.estado === 'vinculado' ? <CheckCircle size={20} color="#10b981" style={{ minWidth: 20 }} /> : <AlertCircle size={18} color={obligarVinculacion ? "#D00" : "#f59e0b"} />}
+                          {item.estado === 'vinculado' ? <CheckCircle size={20} color="#10b981" style={{ minWidth: 20 }} /> : <AlertCircle size={18} color={esAntiguo ? "#9ca3af" : "#f59e0b"} />}
                         </div>
+                        
+                        {item.estado === 'pendiente' && esAntiguo && (
+                          <div style={{ padding: '4px 8px', background: '#f3f4f6', color: '#6b7280', fontSize: 11, fontWeight: 600, borderRadius: 4, marginBottom: 8 }}>
+                            ℹ️ Comprobante antiguo (+3 meses). Se guardará como histórico sin afectar stock actual.
+                          </div>
+                        )}
+
                         <div style={{ display: 'flex', gap: 8 }}>
-                          <div style={{ flex: 1 }}><label style={{ fontSize: 10 }}>Cantidad</label><input type="number" value={item.cantidad} onChange={e => cambiarDatoItem(item.id_temp, 'cantidad', e.target.value)} style={{ width: '100%', fontSize: 12 }} /></div>
+                          <div style={{ flex: 1 }}><label style={{ fontSize: 10 }}>Cantidad (Pon 0 si no se cuenta)</label><input type="number" value={item.cantidad} onChange={e => cambiarDatoItem(item.id_temp, 'cantidad', e.target.value === '' ? '' : Number(e.target.value))} style={{ width: '100%', fontSize: 12 }} /></div>
                           <div style={{ flex: 1 }}><label style={{ fontSize: 10, fontWeight: 700, color: 'var(--texto-suave)' }}>Suma en Boleta (S/)</label><input type="number" step="any" value={item.precio_total_linea} onChange={e => cambiarDatoItem(item.id_temp, 'precio_total_linea', e.target.value)} style={{ width: '100%', fontSize: 12 }} /></div>
                         </div>
                         <div style={{ marginTop: 8, textAlign: 'right' }}><span style={{ fontSize: 11, color: 'var(--texto-suave)' }}>Unitario Base: <b>S/ {unitarioDerivado}</b></span></div>
@@ -772,8 +823,9 @@ export default function AdminCompras() {
                 )}
               </div>
               <div style={{ padding: '16px', borderTop: '1px solid var(--borde)' }}>
+                {/* BOTON GUARDAR YA NO SE BLOQUEA POR PENDIENTES */}
                 <button onClick={guardarCompra} disabled={procesandoPdf || datosFactura.items.length === 0} className="btn-primary" style={{ width: '100%', justifyContent: 'center' }}>
-                  <ListChecks size={18} style={{ marginRight: 8 }}/> Verificar Registro {colaArchivos.length > 1 ? `y Pasar al Siguiente` : `y Actualizar Almacén`}
+                  <ListChecks size={18} style={{ marginRight: 8 }}/> Guardar Registro {colaArchivos.length > 1 ? `y Pasar al Siguiente` : ``}
                 </button>
               </div>
             </div>
@@ -838,13 +890,17 @@ export default function AdminCompras() {
                           
                           {!ocultarAlmacen && item.productos && (<div style={{ fontSize: 10, color: '#3b82f6', fontWeight: 600, marginTop: 2 }}>↳ Almacén: {item.productos.nombre}</div>)}
                           
-                          {!ocultarAlmacen && !item.productos && (
+                          {/* SUBSANAR PENDIENTES DESDE EL HISTORIAL (SÓLO SI NO ES MUY ANTIGUO) */}
+                          {!ocultarAlmacen && !item.productos && !esActivaAntigua && (
                             <div className="no-print" style={{ marginTop: 6, background: '#fef3c7', padding: '6px', borderRadius: '4px', border: '1px dashed #f59e0b' }}>
                               <p style={{ fontSize: 10, color: '#d97706', fontWeight: 700, marginBottom: 4 }}>⚠️ Producto Pendiente (Subsanar):</p>
                               <BuscadorProductos item={{ producto_db_id: null }} productosDB={productosDB} placeholder="Buscar y vincular..." onSelect={(id) => subsanarPendiente(compraActiva.id, item.id, id, item.cantidad)} />
                             </div>
                           )}
-                          {!ocultarAlmacen && !item.productos && <div className="solo-print" style={{ fontSize: 10, color: '#f59e0b', fontWeight: 600, marginTop: 2 }}>↳ Almacén: Pendiente</div>}
+                          {!ocultarAlmacen && !item.productos && esActivaAntigua && (
+                            <div className="no-print" style={{ fontSize: 10, color: '#9ca3af', fontWeight: 600, marginTop: 2 }}>↳ Histórico: Sin vincular</div>
+                          )}
+                          {!ocultarAlmacen && !item.productos && <div className="solo-print" style={{ fontSize: 10, color: '#9ca3af', fontWeight: 600, marginTop: 2 }}>↳ {esActivaAntigua ? 'Histórico: Sin vincular' : 'Almacén: Pendiente'}</div>}
                           
                           <div style={{ fontSize: 10, color: '#9ca3af', fontWeight: 400, marginTop: 2 }}>Unit. Real: S/ {Number(item.precio_unitario).toFixed(4)}</div>
                         </td>
@@ -1001,7 +1057,11 @@ export default function AdminCompras() {
                     <option value="Otro">Otro</option>
                   </select>
                 </div>
-                <div><label style={{ fontSize: 11, fontWeight: 600 }}>Fecha</label><input type="date" value={datosEdicion.fecha} onChange={e => cambiarDatoEdicion('fecha', e.target.value)} style={{ width: '100%', fontSize: 13 }} /></div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600 }}>Fecha</label>
+                  <input type="date" value={datosEdicion.fecha} onChange={e => cambiarDatoEdicion('fecha', e.target.value)} style={{ width: '100%', fontSize: 13 }} />
+                  {new Date(datosEdicion.fecha) < fechaHace3Meses && <p style={{ fontSize: 10, color: 'var(--texto-suave)', marginTop: 4 }}>+3 meses (Registro Histórico)</p>}
+                </div>
                 <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: 11, fontWeight: 600 }}>Proveedor / Empresa</label><input type="text" value={datosEdicion.proveedor} onChange={e => cambiarDatoEdicion('proveedor', e.target.value)} style={{ width: '100%', fontSize: 13 }} /></div>
                 <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: 11, fontWeight: 600 }}>N° Boleta/Factura</label><input type="text" value={datosEdicion.numero_comprobante} onChange={e => cambiarDatoEdicion('numero_comprobante', e.target.value)} style={{ width: '100%', fontSize: 13 }} /></div>
               </div>
@@ -1011,7 +1071,9 @@ export default function AdminCompras() {
                 <button onClick={agregarFilaEdicion} className="btn-ghost" style={{ fontSize: 11, padding: '4px 8px', color: '#10b981' }}><Plus size={14} /> Añadir Fila</button>
               </div>
                 
-              {datosEdicion.items.map((item) => (
+              {datosEdicion.items.map((item) => {
+                const qtyEdicion = Number(item.cantidad) || 0;
+                return (
                 <div key={item.id_temp} style={{ padding: 12, border: `1px solid ${item.estado === 'vinculado' ? '#10b981' : '#f59e0b'}`, borderRadius: 8, marginBottom: 12, background: item.estado === 'vinculado' ? '#10b98108' : '#f59e0b08', position: 'relative' }}>
                   {datosEdicion.items.length > 1 && <button onClick={() => quitarFilaEdicion(item.id_temp)} style={{ position: 'absolute', top: 8, right: 8, background: 'none', border: 'none', color: '#D00', cursor: 'pointer', fontSize: 12 }}>X</button>}
                   <div style={{ marginBottom: 12 }}>
@@ -1023,11 +1085,11 @@ export default function AdminCompras() {
                     {item.estado === 'vinculado' ? <CheckCircle size={20} color="#10b981" style={{ minWidth: 20 }} /> : <AlertCircle size={18} color="#f59e0b" />}
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <div style={{ flex: 1 }}><label style={{ fontSize: 10 }}>Cantidad</label><input type="number" value={item.cantidad} onChange={e => cambiarDatoItemEdicion(item.id_temp, 'cantidad', e.target.value)} style={{ width: '100%', fontSize: 12 }} /></div>
+                    <div style={{ flex: 1 }}><label style={{ fontSize: 10 }}>Cantidad (Pon 0 si no se cuenta)</label><input type="number" value={item.cantidad} onChange={e => cambiarDatoItemEdicion(item.id_temp, 'cantidad', e.target.value === '' ? '' : Number(e.target.value))} style={{ width: '100%', fontSize: 12 }} /></div>
                     <div style={{ flex: 1 }}><label style={{ fontSize: 10, fontWeight: 700, color: 'var(--texto-suave)' }}>Suma en Boleta (S/)</label><input type="number" step="any" value={item.precio_total_linea} onChange={e => cambiarDatoItemEdicion(item.id_temp, 'precio_total_linea', e.target.value)} style={{ width: '100%', fontSize: 12 }} /></div>
                   </div>
                 </div>
-              ))}
+              )})}
               
               <div style={{ background: 'var(--fondo)', padding: 16, borderRadius: 8, border: '1px solid var(--borde)', marginTop: 8 }}>
                 <h4 style={{ fontSize: 12, fontWeight: 700, marginBottom: 12, color: 'var(--texto-suave)' }}>Desglose de Totales</h4>
