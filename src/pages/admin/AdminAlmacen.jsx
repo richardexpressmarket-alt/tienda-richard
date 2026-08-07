@@ -58,6 +58,14 @@ export default function AdminAlmacen() {
     cargar()
   }
 
+  // NUEVO: Función general para actualizar propiedades desde la vista (Activo, Sucursal, Sección)
+  async function actualizarPropiedad(id, campo, valor) {
+    const { error } = await supabase.from('productos').update({ [campo]: valor, updated_at: new Date().toISOString() }).eq('id', id)
+    if (error) return toast.error(`Error al actualizar ${campo}`)
+    toast.success('Cambio guardado ✅')
+    cargar()
+  }
+
   // — Sucursales CRUD
   function abrirNuevaSucursal() {
     setFormSucursal({ nombre: '', direccion: '' })
@@ -135,7 +143,6 @@ export default function AdminAlmacen() {
     toast.success('Excel exportado ✅')
   }
 
-  // — LÓGICA DE EXPORTACIÓN A HOJA DE CONTEO FÍSICO (1 HOJA POR SECCIÓN, FORMATO COMPACTO)
   const imprimirConteoInventario = () => {
     if (productosFiltrados.length === 0) return toast.error('No hay productos para exportar en la vista actual')
 
@@ -150,23 +157,19 @@ export default function AdminAlmacen() {
     let esPrimeraHoja = true;
 
     Object.keys(grupos).sort().forEach(seccion => {
-      // Salto de hoja obligado por cada sección para poder repartirlas
       if (!esPrimeraHoja) {
         doc.addPage(); 
       }
       esPrimeraHoja = false;
 
-      // Título Principal
       doc.setFontSize(12);
       doc.setFont('helvetica', 'bold');
       doc.text('Toma de Inventario Físico', 14, 12);
       
-      // Fecha
       doc.setFontSize(8);
       doc.setFont('helvetica', 'normal');
       doc.text(`Fecha de impresión: ${new Date().toLocaleDateString()}`, 14, 17);
 
-      // Título de la Sección compacto
       doc.setFontSize(10);
       doc.setFont('helvetica', 'bold');
       doc.text(`Sector / Sección: ${seccion}`, 14, 23);
@@ -181,25 +184,25 @@ export default function AdminAlmacen() {
       doc.autoTable({
         head: [['Producto', 'Sist.', 'Físico', 'Nva Sec.']],
         body: tableData,
-        startY: 26, // Siempre inicia a la misma altura en la hoja nueva
+        startY: 26, 
         theme: 'grid', 
         headStyles: { 
-          fillColor: [240, 240, 240], // Gris muy claro para ahorrar tinta
-          textColor: [0, 0, 0],       // Letra negra
+          fillColor: [240, 240, 240], 
+          textColor: [0, 0, 0],       
           fontStyle: 'bold' 
         },
         columnStyles: {
-          0: { cellWidth: 'auto' }, // Toma todo el espacio disponible
-          1: { cellWidth: 15, halign: 'center' }, // Stock Sistema
-          2: { cellWidth: 25 }, // Stock Físico (Ancho para anotar un número)
-          3: { cellWidth: 35 }  // Nueva Sección (Ancho para escribir breve)
+          0: { cellWidth: 'auto' }, 
+          1: { cellWidth: 15, halign: 'center' }, 
+          2: { cellWidth: 25 }, 
+          3: { cellWidth: 35 }  
         },
         styles: { 
-          fontSize: 8,          // Letra pequeña
-          cellPadding: 1.5,     // Espacio interior mínimo
-          minCellHeight: 6,     // Altura mínima reducida
+          fontSize: 8,          
+          cellPadding: 1.5,     
+          minCellHeight: 6,     
           textColor: [0, 0, 0], 
-          lineColor: [0, 0, 0], // Bordes negros
+          lineColor: [0, 0, 0], 
           lineWidth: 0.1
         }
       });
@@ -286,20 +289,38 @@ export default function AdminAlmacen() {
               }
               <div style={{ flex: 1, minWidth: 0, cursor: 'pointer' }} onClick={() => navigate('/admin/productos')}>
                 <p style={{ fontWeight: 600, fontSize: 14 }}>{p.nombre}</p>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 2 }}>
-                  {p.secciones?.nombre && (
-                    <span style={{ fontSize: 11, background: 'var(--naranja-light)', color: 'var(--naranja-dark)', padding: '2px 8px', borderRadius: 20, fontWeight: 500 }}>
-                      📍 {p.secciones.nombre}
-                    </span>
-                  )}
-                  {p.sucursales?.nombre && (
-                    <span style={{ fontSize: 11, background: 'var(--fondo)', color: 'var(--texto-suave)', padding: '2px 8px', borderRadius: 20 }}>
-                      🏪 {p.sucursales.nombre}
-                    </span>
-                  )}
-                  {!p.secciones?.nombre && (
-                    <span style={{ fontSize: 11, color: 'var(--texto-suave)' }}>Sin sección asignada</span>
-                  )}
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 2, alignItems: 'center' }}>
+                  
+                  {/* Select Interactivo de SUCURSAL */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--fondo)', padding: '2px 8px', borderRadius: 20 }}>
+                    <span style={{ fontSize: 11 }}>🏪</span>
+                    <select 
+                      value={p.sucursal_id || ''} 
+                      onChange={(e) => actualizarPropiedad(p.id, 'sucursal_id', e.target.value || null)}
+                      onClick={e => e.stopPropagation()}
+                      style={{ fontSize: 11, color: 'var(--texto-suave)', background: 'transparent', border: 'none', outline: 'none', cursor: 'pointer' }}
+                    >
+                      <option value="">Sin sucursal</option>
+                      {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Select Interactivo de SECCIÓN */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--naranja-light)', padding: '2px 8px', borderRadius: 20 }}>
+                    <span style={{ fontSize: 11 }}>📍</span>
+                    <select 
+                      value={p.seccion_id || ''} 
+                      onChange={(e) => actualizarPropiedad(p.id, 'seccion_id', e.target.value || null)}
+                      onClick={e => e.stopPropagation()}
+                      style={{ fontSize: 11, color: 'var(--naranja-dark)', fontWeight: 500, background: 'transparent', border: 'none', outline: 'none', cursor: 'pointer' }}
+                    >
+                      <option value="">Sin sección</option>
+                      {secciones.filter(s => p.sucursal_id ? s.sucursal_id === p.sucursal_id : true).map(s => (
+                        <option key={s.id} value={s.id}>{s.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
+
                 </div>
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
@@ -307,16 +328,42 @@ export default function AdminAlmacen() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <button onClick={() => actualizarStock(p.id, p.stock - 1)}
                     style={{ width: 26, height: 26, borderRadius: 6, background: 'var(--fondo)', border: '1px solid var(--borde)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>−</button>
-                  <span style={{ fontFamily: 'var(--fuente-display)', fontWeight: 800, fontSize: 16, minWidth: 28, textAlign: 'center', color: p.stock <= p.stock_minimo ? '#E65100' : 'var(--texto)' }}>
-                    {p.stock}
-                  </span>
+                  
+                  {/* INPUT Interactivo para poner el número directo de STOCK */}
+                  <input
+                    type="number"
+                    defaultValue={p.stock}
+                    onBlur={(e) => {
+                      const val = parseInt(e.target.value);
+                      if (!isNaN(val) && val !== p.stock) actualizarStock(p.id, val);
+                      else e.target.value = p.stock; 
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') e.target.blur();
+                    }}
+                    onClick={e => e.stopPropagation()}
+                    style={{ 
+                      fontFamily: 'var(--fuente-display)', fontWeight: 800, fontSize: 16, 
+                      width: 45, textAlign: 'center', 
+                      color: p.stock <= p.stock_minimo ? '#E65100' : 'var(--texto)',
+                      background: 'transparent', border: 'none', borderBottom: '1px dashed var(--borde)', outline: 'none'
+                    }}
+                  />
+
                   <button onClick={() => actualizarStock(p.id, p.stock + 1)}
                     style={{ width: 26, height: 26, borderRadius: 6, background: 'var(--naranja-light)', border: '1px solid var(--naranja-mid)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, color: 'var(--naranja)' }}>+</button>
                 </div>
               </div>
-              <span className={`badge ${p.activo ? 'badge-verde' : 'badge-gris'}`} style={{ flexShrink: 0 }}>
+              
+              {/* Botón Interactivo para Activo/Inactivo */}
+              <button 
+                onClick={(e) => { e.stopPropagation(); actualizarPropiedad(p.id, 'activo', !p.activo); }}
+                className={`badge ${p.activo ? 'badge-verde' : 'badge-gris'}`} 
+                style={{ flexShrink: 0, border: 'none', cursor: 'pointer', outline: 'none' }}
+                title="Clic para cambiar estado"
+              >
                 {p.activo ? 'Activo' : 'Inactivo'}
-              </span>
+              </button>
             </div>
           ))}
         </div>
