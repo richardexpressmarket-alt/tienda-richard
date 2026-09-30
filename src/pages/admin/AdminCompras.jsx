@@ -198,13 +198,13 @@ export default function AdminCompras() {
     return coincidenciaParcial ? coincidenciaParcial.id : null
   }
 
-  // --- LÓGICA IA ESTABLE (Sin Fallbacks que enmascaren el error real) ---
+  // --- LÓGICA IA ACTUALIZADA A MODELOS 2.5 ---
   const procesarDocumentoConGemini = async (file) => {
     setProcesandoPdf(true)
     setPdfUrl(URL.createObjectURL(file))
     try {
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY
-      if (!apiKey) throw new Error('No API Key configurada en el proyecto.')
+      if (!apiKey) throw new Error('No API Key configurada en Vercel/Local.')
 
       const base64Pdf = await convertirPdfABase64(file)
       const mimeType = file.type === 'application/pdf' ? 'application/pdf' : file.type
@@ -217,8 +217,14 @@ export default function AdminCompras() {
         body: JSON.stringify({ contents: [{ parts: [{ inline_data: { mime_type: mimeType, data: base64Pdf } }, { text: prompt }] }] })
       };
 
-      // Única llamada directa al modelo estable Flash. Si falla, nos dirá por qué.
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, requestConfig);
+      // INTENTO 1: Modelo Flash Estable (Actualizado a 2.5)
+      let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, requestConfig);
+
+      // INTENTO 2 (FALLBACK): Modelo Pro Estable (Actualizado a 2.5)
+      if (!response.ok) {
+        console.warn('Fallback activado: Saltando a modelo Pro Estable...');
+        response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${apiKey}`, requestConfig);
+      }
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -233,7 +239,7 @@ export default function AdminCompras() {
       try {
         resultado = JSON.parse(jsonLimpio);
       } catch (err) {
-        throw new Error("La IA no devolvió un formato válido de lectura.");
+        throw new Error("La IA no devolvió un formato válido. Intenta procesar el documento nuevamente.");
       }
 
       const esDuplicado = comprasHistorial.some(c => c.ruc === resultado.ruc && c.numero_comprobante === resultado.numero_comprobante)
@@ -254,12 +260,7 @@ export default function AdminCompras() {
         igv: Number(resultado.igv) || 0, otros_cargos: Number(resultado.otros_cargos) || 0, total: Number(resultado.total) || 0, enlace_drive: '', items: itemsProcesados
       })
       toast.success(esDuplicado ? 'Archivo analizado (Posible Duplicado)' : 'Documento analizado listo para verificar.')
-    } catch (error) { 
-      // Ahora mostrará el error exacto que envía Google.
-      toast.error('Error API IA: ' + error.message, { duration: 8000 }) 
-    } finally { 
-      setProcesandoPdf(false) 
-    }
+    } catch (error) { toast.error('Error API IA: ' + error.message, { duration: 6000 }) } finally { setProcesandoPdf(false) }
   }
 
   // --- FUNCIONES FORMULARIO DE REGISTRO ---
@@ -609,14 +610,14 @@ export default function AdminCompras() {
     const doc = new jsPDF('landscape'); 
     doc.text(`Historial de Compras Detallado (${filtroDoc})`, 14, 15); 
     doc.setFontSize(10); 
-    doc.text(`Desde: ${desde} - Hasta: ${hasta}`, 14, 22);
+    doc.text(`Desde: ${desde} - Hasta:${hasta}`, 14, 22);
     
     const tableData = [];
     
     comprasFiltradasHistorial.forEach(c => {
       tableData.push([
         { 
-          content: `COMPRA: ${c.fecha_compra} |${c.tipo_comprobante || 'Factura'}: ${c.numero_comprobante} | PROVEEDOR:${c.empresa} (RUC: ${c.ruc}) \vert{} TOTAL: S/ ${Number(c.total).toFixed(2)}`, 
+          content: `COMPRA: ${c.fecha_compra} \vert{}${c.tipo_comprobante || 'Factura'}: ${c.numero_comprobante} \vert{} PROVEEDOR:${c.empresa} (RUC: ${c.ruc}) \vert{} TOTAL: S/ ${Number(c.total).toFixed(2)}`, 
           colSpan: 5, 
           styles: { fillColor: [230, 230, 230], fontStyle: 'bold', textColor: [0,0,0] } 
         }
