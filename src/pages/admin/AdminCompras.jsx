@@ -198,7 +198,7 @@ export default function AdminCompras() {
     return coincidenciaParcial ? coincidenciaParcial.id : null
   }
 
-  // --- LÓGICA IA CORREGIDA Y OPTIMIZADA ---
+  // --- LÓGICA IA CON FALLBACK MULTI-MODELO ---
   const procesarDocumentoConGemini = async (file) => {
     setProcesandoPdf(true)
     setPdfUrl(URL.createObjectURL(file))
@@ -211,33 +211,36 @@ export default function AdminCompras() {
 
       const prompt = `Analiza detenidamente este comprobante. REGLAS: 1. Convierte docenas a unidades. 2. Extrae PRECIO TOTAL PAGADO POR LÍNEA. Extrae JSON plano sin formato markdown extra: {"proveedor": "Nombre", "ruc": "RUC", "tipo_comprobante": "Factura o Boleta", "numero_comprobante": "Serie-Corr", "fecha": "YYYY-MM-DD", "subtotal": 0, "igv": 0, "otros_cargos": 0, "total": 0, "items": [{"nombreOriginal": "Desc exacta del recibo", "cantidad": 1, "precio_total_linea": 0}]}`
 
-      // AHORA USA EL MODELO CORRECTO: gemini-1.5-flash
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-        { 
-          method: 'POST', 
-          headers: { 'Content-Type': 'application/json' }, 
-          body: JSON.stringify({ contents: [{ parts: [{ inline_data: { mime_type: mimeType, data: base64Pdf } }, { text: prompt }] }] }) 
-        }
-      )
+      const requestConfig = {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ inline_data: { mime_type: mimeType, data: base64Pdf } }, { text: prompt }] }] })
+      };
 
-      // SI LA API FALLA, EXTRAEMOS EL MENSAJE REAL DE GOOGLE
+      // INTENTO 1: Modelo Flash Latest (El más rápido y recomendado)
+      let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`, requestConfig);
+
+      // INTENTO 2 (FALLBACK): Si el primero falla o no existe, salta automáticamente al Pro Latest
+      if (!response.ok) {
+        console.warn('Fallback activado: Saltando a modelo Pro-Latest...');
+        response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`, requestConfig);
+      }
+
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error?.message || `Código de error: ${response.status}`);
+        throw new Error(errorData.error?.message || `Código de error HTTP: ${response.status}`);
       }
 
       const data = await response.json()
       const textoRespuesta = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
       
-      // Limpiamos cualquier formato indeseado que envíe la IA (como backticks ```json)
+      // Limpieza exhaustiva del JSON recibido
       const jsonLimpio = textoRespuesta.replace(/```json/gi, '').replace(/```/g, '').trim();
       let resultado;
-      
       try {
         resultado = JSON.parse(jsonLimpio);
-      } catch (errJson) {
-        console.error("JSON devuelto por IA no es válido:", jsonLimpio);
-        throw new Error("Google devolvió información mal formateada. Intenta de nuevo.");
+      } catch (err) {
+        throw new Error("La IA no devolvió un formato válido. Intenta procesar el documento nuevamente.");
       }
 
       const esDuplicado = comprasHistorial.some(c => c.ruc === resultado.ruc && c.numero_comprobante === resultado.numero_comprobante)
@@ -258,11 +261,7 @@ export default function AdminCompras() {
         igv: Number(resultado.igv) || 0, otros_cargos: Number(resultado.otros_cargos) || 0, total: Number(resultado.total) || 0, enlace_drive: '', items: itemsProcesados
       })
       toast.success(esDuplicado ? 'Archivo analizado (Posible Duplicado)' : 'Documento analizado listo para verificar.')
-    } catch (error) { 
-      toast.error('Error API IA: ' + error.message, { duration: 6000 }) 
-    } finally { 
-      setProcesandoPdf(false) 
-    }
+    } catch (error) { toast.error('Error API IA: ' + error.message, { duration: 6000 }) } finally { setProcesandoPdf(false) }
   }
 
   // --- FUNCIONES FORMULARIO DE REGISTRO ---
@@ -619,7 +618,7 @@ export default function AdminCompras() {
     comprasFiltradasHistorial.forEach(c => {
       tableData.push([
         { 
-          content: `COMPRA: ${c.fecha_compra} | ${c.tipo_comprobante || 'Factura'}: ${c.numero_comprobante} | PROVEEDOR:${c.empresa} (RUC: ${c.ruc}) | TOTAL: S/ ${Number(c.total).toFixed(2)}`, 
+          content: `COMPRA: ${c.fecha_compra} | ${c.tipo_comprobante || 'Factura'}: ${c.numero_comprobante} | PROVEEDOR: ${c.empresa} (RUC: ${c.ruc}) | TOTAL: S/ ${Number(c.total).toFixed(2)}`, 
           colSpan: 5, 
           styles: { fillColor: [230, 230, 230], fontStyle: 'bold', textColor: [0,0,0] } 
         }
@@ -779,7 +778,7 @@ export default function AdminCompras() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                     <div style={{ background: '#3b82f615', padding: 12, borderRadius: 8, border: '1px dashed #3b82f6' }}>
                       <label style={{ fontSize: 12, fontWeight: 700, color: '#3b82f6', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}><ExternalLink size={16} /> Enlace de Google Drive (Obligatorio)</label>
-                      <input type="url" placeholder="[https://drive.google.com/file/d/](https://drive.google.com/file/d/)..." value={datosFactura.enlace_drive} onChange={e => cambiarDatoFactura('enlace_drive', e.target.value)} style={{ width: '100%', fontSize: 13, padding: '8px 12px', border: '1px solid #3b82f655', borderRadius: 4 }} required />
+                      <input type="url" placeholder="https://drive.google.com/file/d/..." value={datosFactura.enlace_drive} onChange={e => cambiarDatoFactura('enlace_drive', e.target.value)} style={{ width: '100%', fontSize: 13, padding: '8px 12px', border: '1px solid #3b82f655', borderRadius: 4 }} required />
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
