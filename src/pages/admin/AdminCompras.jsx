@@ -198,7 +198,7 @@ export default function AdminCompras() {
     return coincidenciaParcial ? coincidenciaParcial.id : null
   }
 
-  // --- LÓGICA IA CON FALLBACK MULTI-MODELO ---
+  // --- LÓGICA IA CON FALLBACK MULTI-MODELO ESTABLE ---
   const procesarDocumentoConGemini = async (file) => {
     setProcesandoPdf(true)
     setPdfUrl(URL.createObjectURL(file))
@@ -217,13 +217,13 @@ export default function AdminCompras() {
         body: JSON.stringify({ contents: [{ parts: [{ inline_data: { mime_type: mimeType, data: base64Pdf } }, { text: prompt }] }] })
       };
 
-      // INTENTO 1: Modelo Flash Latest (El más rápido y recomendado)
-      let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`, requestConfig);
+      // INTENTO 1: Modelo Flash Estable
+      let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, requestConfig);
 
-      // INTENTO 2 (FALLBACK): Si el primero falla o no existe, salta automáticamente al Pro Latest
+      // INTENTO 2 (FALLBACK): Modelo Pro Estable
       if (!response.ok) {
-        console.warn('Fallback activado: Saltando a modelo Pro-Latest...');
-        response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`, requestConfig);
+        console.warn('Fallback activado: Saltando a modelo Pro Estable...');
+        response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`, requestConfig);
       }
 
       if (!response.ok) {
@@ -618,7 +618,7 @@ export default function AdminCompras() {
     comprasFiltradasHistorial.forEach(c => {
       tableData.push([
         { 
-          content: `COMPRA: ${c.fecha_compra} | ${c.tipo_comprobante || 'Factura'}: ${c.numero_comprobante} | PROVEEDOR: ${c.empresa} (RUC: ${c.ruc}) | TOTAL: S/ ${Number(c.total).toFixed(2)}`, 
+          content: `COMPRA: ${c.fecha_compra} \vert{}${c.tipo_comprobante || 'Factura'}: ${c.numero_comprobante} \vert{} PROVEEDOR:${c.empresa} (RUC: ${c.ruc}) \vert{} TOTAL: S/ ${Number(c.total).toFixed(2)}`, 
           colSpan: 5, 
           styles: { fillColor: [230, 230, 230], fontStyle: 'bold', textColor: [0,0,0] } 
         }
