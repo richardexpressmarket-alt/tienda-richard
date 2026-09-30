@@ -198,26 +198,47 @@ export default function AdminCompras() {
     return coincidenciaParcial ? coincidenciaParcial.id : null
   }
 
+  // --- LÓGICA IA CORREGIDA Y OPTIMIZADA ---
   const procesarDocumentoConGemini = async (file) => {
     setProcesandoPdf(true)
     setPdfUrl(URL.createObjectURL(file))
     try {
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY
-      if (!apiKey) throw new Error('No API Key configurada')
+      if (!apiKey) throw new Error('No API Key configurada en Vercel/Local.')
 
       const base64Pdf = await convertirPdfABase64(file)
       const mimeType = file.type === 'application/pdf' ? 'application/pdf' : file.type
 
-      const prompt = `Analiza detenidamente este comprobante. REGLAS: 1. Convierte docenas a unidades. 2. Extrae PRECIO TOTAL PAGADO POR LÍNEA. Extrae JSON plano: {"proveedor": "Nombre", "ruc": "RUC", "tipo_comprobante": "Factura o Boleta", "numero_comprobante": "Serie-Corr", "fecha": "YYYY-MM-DD", "subtotal": 0, "igv": 0, "otros_cargos": 0, "total": 0, "items": [{"nombreOriginal": "Desc exacta del recibo", "cantidad": 1, "precio_total_linea": 0}]}`
+      const prompt = `Analiza detenidamente este comprobante. REGLAS: 1. Convierte docenas a unidades. 2. Extrae PRECIO TOTAL PAGADO POR LÍNEA. Extrae JSON plano sin formato markdown extra: {"proveedor": "Nombre", "ruc": "RUC", "tipo_comprobante": "Factura o Boleta", "numero_comprobante": "Serie-Corr", "fecha": "YYYY-MM-DD", "subtotal": 0, "igv": 0, "otros_cargos": 0, "total": 0, "items": [{"nombreOriginal": "Desc exacta del recibo", "cantidad": 1, "precio_total_linea": 0}]}`
 
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ inline_data: { mime_type: mimeType, data: base64Pdf } }, { text: prompt }] }] }) }
+      // AHORA USA EL MODELO CORRECTO: gemini-1.5-flash
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+        { 
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' }, 
+          body: JSON.stringify({ contents: [{ parts: [{ inline_data: { mime_type: mimeType, data: base64Pdf } }, { text: prompt }] }] }) 
+        }
       )
-      if (!response.ok) throw new Error('Error en IA')
+
+      // SI LA API FALLA, EXTRAEMOS EL MENSAJE REAL DE GOOGLE
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || `Código de error: ${response.status}`);
+      }
 
       const data = await response.json()
-      const jsonLimpio = data.candidates?.[0]?.content?.parts?.[0]?.text.replace(/```json/g, '').replace(/```/g, '').trim()
-      const resultado = JSON.parse(jsonLimpio)
+      const textoRespuesta = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      
+      // Limpiamos cualquier formato indeseado que envíe la IA (como backticks ```json)
+      const jsonLimpio = textoRespuesta.replace(/```json/gi, '').replace(/```/g, '').trim();
+      let resultado;
+      
+      try {
+        resultado = JSON.parse(jsonLimpio);
+      } catch (errJson) {
+        console.error("JSON devuelto por IA no es válido:", jsonLimpio);
+        throw new Error("Google devolvió información mal formateada. Intenta de nuevo.");
+      }
 
       const esDuplicado = comprasHistorial.some(c => c.ruc === resultado.ruc && c.numero_comprobante === resultado.numero_comprobante)
       if (esDuplicado) toast.error('¡CUIDADO! Este comprobante parece estar duplicado.', { duration: 5000 })
@@ -237,7 +258,11 @@ export default function AdminCompras() {
         igv: Number(resultado.igv) || 0, otros_cargos: Number(resultado.otros_cargos) || 0, total: Number(resultado.total) || 0, enlace_drive: '', items: itemsProcesados
       })
       toast.success(esDuplicado ? 'Archivo analizado (Posible Duplicado)' : 'Documento analizado listo para verificar.')
-    } catch (error) { toast.error('Error IA: ' + error.message) } finally { setProcesandoPdf(false) }
+    } catch (error) { 
+      toast.error('Error API IA: ' + error.message, { duration: 6000 }) 
+    } finally { 
+      setProcesandoPdf(false) 
+    }
   }
 
   // --- FUNCIONES FORMULARIO DE REGISTRO ---
@@ -594,7 +619,7 @@ export default function AdminCompras() {
     comprasFiltradasHistorial.forEach(c => {
       tableData.push([
         { 
-          content: `COMPRA: ${c.fecha_compra} | ${c.tipo_comprobante || 'Factura'}: ${c.numero_comprobante} | PROVEEDOR: ${c.empresa} (RUC: ${c.ruc}) | TOTAL: S/ ${Number(c.total).toFixed(2)}`, 
+          content: `COMPRA: ${c.fecha_compra} | ${c.tipo_comprobante || 'Factura'}: ${c.numero_comprobante} | PROVEEDOR:${c.empresa} (RUC: ${c.ruc}) | TOTAL: S/ ${Number(c.total).toFixed(2)}`, 
           colSpan: 5, 
           styles: { fillColor: [230, 230, 230], fontStyle: 'bold', textColor: [0,0,0] } 
         }
@@ -720,7 +745,7 @@ export default function AdminCompras() {
               <div className="card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', flex: 1 }}>
                 <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--borde)', background: 'var(--fondo)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <h3 style={{ fontSize: 14, fontWeight: 700 }}>
-                    {colaArchivos.length > 1 ? `En cola: ${indiceCola + 1} de ${colaArchivos.length}` : 'Documento Adjunto'}
+                    {colaArchivos.length > 1 ? `En cola: ${indiceCola + 1} de${colaArchivos.length}` : 'Documento Adjunto'}
                   </h3>
                   <button onClick={resetearIngreso} className="btn-ghost" style={{ padding: '4px 12px', fontSize: 12, color: '#D00' }}>Cancelar Todo</button>
                 </div>
@@ -754,7 +779,7 @@ export default function AdminCompras() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                     <div style={{ background: '#3b82f615', padding: 12, borderRadius: 8, border: '1px dashed #3b82f6' }}>
                       <label style={{ fontSize: 12, fontWeight: 700, color: '#3b82f6', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}><ExternalLink size={16} /> Enlace de Google Drive (Obligatorio)</label>
-                      <input type="url" placeholder="https://drive.google.com/file/d/..." value={datosFactura.enlace_drive} onChange={e => cambiarDatoFactura('enlace_drive', e.target.value)} style={{ width: '100%', fontSize: 13, padding: '8px 12px', border: '1px solid #3b82f655', borderRadius: 4 }} required />
+                      <input type="url" placeholder="[https://drive.google.com/file/d/](https://drive.google.com/file/d/)..." value={datosFactura.enlace_drive} onChange={e => cambiarDatoFactura('enlace_drive', e.target.value)} style={{ width: '100%', fontSize: 13, padding: '8px 12px', border: '1px solid #3b82f655', borderRadius: 4 }} required />
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
@@ -823,7 +848,6 @@ export default function AdminCompras() {
                 )}
               </div>
               <div style={{ padding: '16px', borderTop: '1px solid var(--borde)' }}>
-                {/* BOTON GUARDAR YA NO SE BLOQUEA POR PENDIENTES */}
                 <button onClick={guardarCompra} disabled={procesandoPdf || datosFactura.items.length === 0} className="btn-primary" style={{ width: '100%', justifyContent: 'center' }}>
                   <ListChecks size={18} style={{ marginRight: 8 }}/> Guardar Registro {colaArchivos.length > 1 ? `y Pasar al Siguiente` : ``}
                 </button>
