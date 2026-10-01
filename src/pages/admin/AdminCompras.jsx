@@ -198,7 +198,7 @@ export default function AdminCompras() {
     return coincidenciaParcial ? coincidenciaParcial.id : null
   }
 
-  // --- LÓGICA IA ACTUALIZADA ---
+  // --- LÓGICA IA: MODELO FLASH GRATUITO (SIN FALLBACK PRO) ---
   const procesarDocumentoConGemini = async (file) => {
     setProcesandoPdf(true)
     setPdfUrl(URL.createObjectURL(file))
@@ -217,10 +217,13 @@ export default function AdminCompras() {
         body: JSON.stringify({ contents: [{ parts: [{ inline_data: { mime_type: mimeType, data: base64Pdf } }, { text: prompt }] }] })
       };
 
-      // Único intento usando la versión explícita que requiere Google (3.1-pro-preview)
-      let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent?key=${apiKey}`, requestConfig);
+      // Único intento usando la versión estable, gratuita y veloz: gemini-1.5-flash
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, requestConfig);
 
       if (!response.ok) {
+        if (response.status === 429) {
+           throw new Error("⏳ Has superado el límite de lecturas por minuto de Google. Por favor, espera 20 segundos y vuelve a intentarlo.");
+        }
         const errorData = await response.json();
         throw new Error(errorData.error?.message || `Código de error HTTP: ${response.status}`);
       }
@@ -254,7 +257,7 @@ export default function AdminCompras() {
         igv: Number(resultado.igv) || 0, otros_cargos: Number(resultado.otros_cargos) || 0, total: Number(resultado.total) || 0, enlace_drive: '', items: itemsProcesados
       })
       toast.success(esDuplicado ? 'Archivo analizado (Posible Duplicado)' : 'Documento analizado listo para verificar.')
-    } catch (error) { toast.error('Error API IA: ' + error.message, { duration: 6000 }) } finally { setProcesandoPdf(false) }
+    } catch (error) { toast.error('Error IA: ' + error.message, { duration: 6000 }) } finally { setProcesandoPdf(false) }
   }
 
   // --- FUNCIONES FORMULARIO DE REGISTRO ---
@@ -604,14 +607,14 @@ export default function AdminCompras() {
     const doc = new jsPDF('landscape'); 
     doc.text(`Historial de Compras Detallado (${filtroDoc})`, 14, 15); 
     doc.setFontSize(10); 
-    doc.text(`Desde: ${desde} - Hasta:${hasta}`, 14, 22);
+    doc.text(`Desde: ${desde} - Hasta: ${hasta}`, 14, 22);
     
     const tableData = [];
     
     comprasFiltradasHistorial.forEach(c => {
       tableData.push([
         { 
-          content: `COMPRA: ${c.fecha_compra} \vert{}${c.tipo_comprobante || 'Factura'}: ${c.numero_comprobante} \vert{} PROVEEDOR:${c.empresa} (RUC: ${c.ruc}) \vert{} TOTAL: S/ ${Number(c.total).toFixed(2)}`, 
+          content: `COMPRA: ${c.fecha_compra} | ${c.tipo_comprobante || 'Factura'}: ${c.numero_comprobante} | PROVEEDOR: ${c.empresa} (RUC: ${c.ruc}) | TOTAL: S/ ${Number(c.total).toFixed(2)}`, 
           colSpan: 5, 
           styles: { fillColor: [230, 230, 230], fontStyle: 'bold', textColor: [0,0,0] } 
         }
