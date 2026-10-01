@@ -198,7 +198,7 @@ export default function AdminCompras() {
     return coincidenciaParcial ? coincidenciaParcial.id : null
   }
 
-  // --- LÓGICA IA ACTUALIZADA A MODELOS 2.5 ---
+  // --- LÓGICA IA ACTUALIZADA ---
   const procesarDocumentoConGemini = async (file) => {
     setProcesandoPdf(true)
     setPdfUrl(URL.createObjectURL(file))
@@ -217,14 +217,8 @@ export default function AdminCompras() {
         body: JSON.stringify({ contents: [{ parts: [{ inline_data: { mime_type: mimeType, data: base64Pdf } }, { text: prompt }] }] })
       };
 
-      // INTENTO 1: Modelo Flash Estable (Actualizado a 2.5)
-      let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, requestConfig);
-
-      // INTENTO 2 (FALLBACK): Modelo Pro Estable (Actualizado a 2.5)
-      if (!response.ok) {
-        console.warn('Fallback activado: Saltando a modelo Pro Estable...');
-        response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${apiKey}`, requestConfig);
-      }
+      // Único intento usando la versión explícita que requiere Google (3.1-pro-preview)
+      let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent?key=${apiKey}`, requestConfig);
 
       if (!response.ok) {
         const errorData = await response.json();
