@@ -198,7 +198,7 @@ export default function AdminCompras() {
     return coincidenciaParcial ? coincidenciaParcial.id : null
   }
 
-  // --- LÓGICA IA: MODELO FLASH GRATUITO (SIN FALLBACK PRO) ---
+  // --- LÓGICA IA ACTUALIZADA A MODELOS GRATUITOS 3.X ---
   const procesarDocumentoConGemini = async (file) => {
     setProcesandoPdf(true)
     setPdfUrl(URL.createObjectURL(file))
@@ -217,15 +217,24 @@ export default function AdminCompras() {
         body: JSON.stringify({ contents: [{ parts: [{ inline_data: { mime_type: mimeType, data: base64Pdf } }, { text: prompt }] }] })
       };
 
-      // Único intento usando la versión estable, gratuita y veloz: gemini-1.5-flash
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, requestConfig);
+      // INTENTO 1: Modelo Flash 3.8 (El gratuito más actual)
+      let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${apiKey}`, requestConfig);
+
+      // INTENTO 2 (FALLBACK): Modelo Flash Lite 3.5
+      if (!response.ok) {
+        if (response.status === 429) {
+           throw new Error("⏳ Has superado el límite gratuito de Google. Espera 20 segundos e intenta de nuevo.");
+        }
+        console.warn('Fallback activado: Saltando a modelo 3.5 Flash-Lite...');
+        response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`, requestConfig);
+      }
 
       if (!response.ok) {
         if (response.status === 429) {
-           throw new Error("⏳ Has superado el límite de lecturas por minuto de Google. Por favor, espera 20 segundos y vuelve a intentarlo.");
+           throw new Error("⏳ Has superado el límite gratuito de Google. Espera 20 segundos e intenta de nuevo.");
         }
         const errorData = await response.json();
-        throw new Error(errorData.error?.message || `Código de error HTTP: ${response.status}`);
+        throw new Error(errorData.error?.message || `Código HTTP: ${response.status}`);
       }
 
       const data = await response.json()
@@ -236,7 +245,7 @@ export default function AdminCompras() {
       try {
         resultado = JSON.parse(jsonLimpio);
       } catch (err) {
-        throw new Error("La IA no devolvió un formato válido. Intenta procesar el documento nuevamente.");
+        throw new Error("La IA devolvió un formato confuso. Intenta de nuevo.");
       }
 
       const esDuplicado = comprasHistorial.some(c => c.ruc === resultado.ruc && c.numero_comprobante === resultado.numero_comprobante)
