@@ -7,7 +7,7 @@ import { Package, Tag, ShoppingBag, AlertTriangle, XCircle, EyeOff, Clock, Users
 import toast from 'react-hot-toast'
 
 export default function AdminDashboard() {
-  const { tiendaActual } = useTienda()
+  const { tiendaActual, modoOscuro } = useTienda()
   const esMiller = tiendaActual === 'miller'
 
   const [stats, setStats]           = useState({ productos: 0, categorias: 0, ventas_hoy: 0, total_hoy: 0 })
@@ -19,6 +19,10 @@ export default function AdminDashboard() {
   const [verInactivos, setVerInactivos] = useState(false)
   const [cargando, setCargando]     = useState(true)
 
+  // Paginador (50 por defecto)
+  const [paginaActual, setPaginaActual]     = useState(1)
+  const [itemsPorPagina, setItemsPorPagina] = useState(50)
+
   // Estados exclusivos para Miller Digital (Vencimientos de Usuarios y Servicios)
   const [vistaMiller, setVistaMiller]     = useState('usuarios') // 'usuarios' | 'servicios'
   const [suscripciones, setSuscripciones] = useState([])
@@ -29,7 +33,10 @@ export default function AdminDashboard() {
 
   const navigate = useNavigate()
 
-  useEffect(() => { cargar() }, [tiendaActual])
+  useEffect(() => {
+    setPaginaActual(1)
+    cargar()
+  }, [tiendaActual])
 
   async function cargar() {
     setCargando(true)
@@ -46,12 +53,12 @@ export default function AdminDashboard() {
       supabase.from('ventas').select('total, tienda').gte('created_at', hoy.toISOString()),
     ])
 
-    const prodsTienda = (prodsTodos || []).filter(p => (p.tienda || 'richard') === tiendaActual)
-    const catsTienda  = (catsTodas || []).filter(c => (c.tienda || 'richard') === tiendaActual)
+    const prodsTienda  = (prodsTodos || []).filter(p => (p.tienda || 'richard') === tiendaActual)
+    const catsTienda   = (catsTodas || []).filter(c => (c.tienda || 'richard') === tiendaActual)
     const ventasTienda = (ventasHoy || []).filter(v => (v.tienda || 'richard') === tiendaActual)
 
-    const activos = prodsTienda.filter(p => p.activo)
-    const inacts  = prodsTienda.filter(p => !p.activo)
+    const activos   = prodsTienda.filter(p => p.activo)
+    const inacts    = prodsTienda.filter(p => !p.activo)
     const total_hoy = ventasTienda.reduce((a, v) => a + Number(v.total), 0)
 
     setStats({
@@ -85,7 +92,6 @@ export default function AdminDashboard() {
 
   function irAEditar(id) { navigate(`/admin/productos?editar=${id}`) }
 
-  // Funciones para Vencimientos de Miller Digital
   const calcularDiasRestantes = (fechaVenc) => {
     if (!fechaVenc) return 999
     const hoy = new Date(); hoy.setHours(0, 0, 0, 0)
@@ -116,14 +122,20 @@ export default function AdminDashboard() {
     cargar()
   }
 
-  const [paginaActual, setPaginaActual] = useState(1)
-  const [itemsPorPagina, setItemsPorPagina] = useState(50)
-  const limiteValido = Math.max(1, Number(itemsPorPagina) || 50)
-
+  const limiteValido      = Math.max(1, Number(itemsPorPagina) || 50)
   const bajFiltrado       = filtroCat ? stockBajo.filter(p => p.categoria_id  === filtroCat) : stockBajo
   const ceroFiltrado      = filtroCat ? stockCero.filter(p => p.categoria_id  === filtroCat) : stockCero
   const inactivosFiltrado = filtroCat ? inactivos.filter(p => p.categoria_id === filtroCat) : inactivos
   const subsPaginadas     = suscripciones.slice((paginaActual - 1) * limiteValido, paginaActual * limiteValido)
+
+  // Colores adaptativos para que siempre se lea perfecto en Modo Oscuro y Modo Claro
+  const bgFila           = modoOscuro ? '#1e293b' : '#ffffff'
+  const bgFilaUrgente    = modoOscuro ? 'rgba(239, 68, 68, 0.14)' : '#fef2f2'
+  const bgDetalle        = modoOscuro ? '#0f172a' : '#f8fafc'
+  const bgCajaDato       = modoOscuro ? '#1e293b' : '#ffffff'
+  const bordeFila        = modoOscuro ? '#334155' : 'var(--borde)'
+  const textoPrincipal   = modoOscuro ? '#f8fafc' : '#0f172a'
+  const textoSecundario  = modoOscuro ? '#94a3b8' : '#64748b'
 
   const cards = [
     { label: esMiller ? 'Servicios activos' : 'Productos activos', valor: stats.productos, icon: Package, color: esMiller ? '#7c3aed' : 'var(--naranja)' },
@@ -142,17 +154,17 @@ export default function AdminDashboard() {
         {esMiller ? <><Cpu size={24} color="#7c3aed" /> Dashboard Miller Digital<span style={{ color: '#06b6d4' }}>.</span></> : <>Dashboard<span style={{ color: 'var(--naranja)' }}>.</span></>}
       </h1>
 
-      {/* Cards */}
+      {/* Cards superiores */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 14, marginBottom: 28 }}>
         {cards.map(({ label, valor, icon: Icon, color }) => (
           <div key={label} className="card" style={{ padding: '18px 20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
               <p style={{ fontSize: 13, color: 'var(--texto-suave)' }}>{label}</p>
-              <div style={{ width: 36, height: 36, borderRadius: 10, background: color + '18', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: color + '22', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Icon size={18} color={color} />
               </div>
             </div>
-            <p style={{ fontFamily: 'var(--fuente-display)', fontSize: 26, fontWeight: 800 }}>{valor}</p>
+            <p style={{ fontFamily: 'var(--fuente-display)', fontSize: 26, fontWeight: 800, color: 'var(--texto)' }}>{valor}</p>
           </div>
         ))}
       </div>
@@ -162,23 +174,23 @@ export default function AdminDashboard() {
         <div className="card" style={{ padding: 20, borderTop: '4px solid #7c3aed' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, flexWrap: 'wrap', gap: 10 }}>
             <div>
-              <h2 style={{ fontSize: 17, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Clock size={20} color="#7c3aed" /> Próximos a Vencer (Renovaciones)
+              <h2 style={{ fontSize: 17, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8, color: textoPrincipal }}>
+                <Clock size={20} color="#06b6d4" /> Próximos a Vencer (Renovaciones)
               </h2>
-              <p style={{ fontSize: 12, color: 'var(--texto-suave)' }}>Haz clic en cualquier fila para expandir toda la información y renovar</p>
+              <p style={{ fontSize: 12, color: textoSecundario }}>Haz clic en cualquier fila para expandir toda la información y renovar</p>
             </div>
 
-            <div style={{ display: 'flex', gap: 6, background: 'var(--fondo)', padding: 4, borderRadius: 10 }}>
+            <div style={{ display: 'flex', gap: 6, background: bgDetalle, padding: 4, borderRadius: 10, border: `1px solid ${bordeFila}` }}>
               <button
                 onClick={() => setVistaMiller('usuarios')}
                 className={vistaMiller === 'usuarios' ? 'btn-primary' : 'btn-ghost'}
-                style={{ fontSize: 12, padding: '7px 14px', background: vistaMiller === 'usuarios' ? '#7c3aed' : 'transparent', border: 'none' }}>
+                style={{ fontSize: 12, padding: '7px 14px', background: vistaMiller === 'usuarios' ? '#7c3aed' : 'transparent', color: vistaMiller === 'usuarios' ? '#fff' : textoSecundario, border: 'none' }}>
                 <Users size={14} /> Usuarios ({suscripciones.length})
               </button>
               <button
                 onClick={() => setVistaMiller('servicios')}
                 className={vistaMiller === 'servicios' ? 'btn-primary' : 'btn-ghost'}
-                style={{ fontSize: 12, padding: '7px 14px', background: vistaMiller === 'servicios' ? '#0891b2' : 'transparent', border: 'none' }}>
+                style={{ fontSize: 12, padding: '7px 14px', background: vistaMiller === 'servicios' ? '#0891b2' : 'transparent', color: vistaMiller === 'servicios' ? '#fff' : textoSecundario, border: 'none' }}>
                 <Key size={14} /> Stock Servicios ({cuentasMadre.length})
               </button>
             </div>
@@ -186,75 +198,129 @@ export default function AdminDashboard() {
 
           {vistaMiller === 'usuarios' ? (
             suscripciones.length === 0 ? (
-              <p style={{ textAlign: 'center', padding: '30px 0', color: 'var(--texto-suave)', fontSize: 13 }}>
+              <p style={{ textAlign: 'center', padding: '30px 0', color: textoSecundario, fontSize: 13 }}>
                 Aún no hay usuarios con suscripciones registradas.
               </p>
             ) : (
               <>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {subsPaginadas.map(s => {
-                  const dias = calcularDiasRestantes(s.fecha_vencimiento)
-                  const urgente = dias <= 5
-                  const expandido = expandidoId === s.id
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {subsPaginadas.map(s => {
+                    const dias = calcularDiasRestantes(s.fecha_vencimiento)
+                    const urgente = dias <= 5
+                    const expandido = expandidoId === s.id
 
-                  return (
-                    <div key={s.id} style={{ border: `1.5px solid ${urgente ? '#f87171' : 'var(--borde)'}`, borderRadius: 10, background: urgente ? '#fef2f2' : '#fff', overflow: 'hidden', transition: '0.2s' }}>
-                      <div onClick={() => setExpandidoId(expandido ? null : s.id)} style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', gap: 12 }}>
-                        <div>
-                          <p style={{ fontWeight: 700, fontSize: 14 }}>
-                            {s.cliente_nombre || 'Cliente'} <span style={{ color: '#7c3aed' }}>· {s.nombre_producto}</span>
-                          </p>
-                          <p style={{ fontSize: 11, color: 'var(--texto-suave)', marginTop: 2 }}>
-                            ✉️ {s.cliente_correo || 'Sin correo'} · 📱 {s.cliente_whatsapp || 'Sin WhatsApp'} · 🌐 {s.plataforma_venta || 'WhatsApp'}
-                          </p>
+                    return (
+                      <div key={s.id} style={{
+                        border: `1.5px solid ${urgente ? '#ef4444' : (expandido ? '#7c3aed' : bordeFila)}`,
+                        borderRadius: 12,
+                        background: urgente ? bgFilaUrgente : bgFila,
+                        overflow: 'hidden',
+                        transition: '0.2s'
+                      }}>
+                        {/* Cabecera de la fila */}
+                        <div
+                          onClick={() => setExpandidoId(expandido ? null : s.id)}
+                          style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', gap: 12 }}
+                        >
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                              <span style={{ fontWeight: 800, fontSize: 15, color: textoPrincipal }}>
+                                {s.cliente_nombre || 'Cliente sin nombre'}
+                              </span>
+                              <span style={{
+                                fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 12,
+                                background: 'rgba(124, 58, 237, 0.2)', color: modoOscuro ? '#c4b5fd' : '#6d28d9',
+                                border: '1px solid rgba(124, 58, 237, 0.35)'
+                              }}>
+                                {s.nombre_producto}
+                              </span>
+                            </div>
+                            <p style={{ fontSize: 12, color: textoSecundario, marginTop: 5 }}>
+                              ✉️ {s.cliente_correo || 'Sin correo'} &nbsp;·&nbsp; 📱 {s.cliente_whatsapp || 'Sin WhatsApp'} &nbsp;·&nbsp; 🌐 {s.plataforma_venta || 'WhatsApp'}
+                            </p>
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                            <span style={{
+                              fontSize: 11, fontWeight: 800, padding: '5px 12px', borderRadius: 20,
+                              background: dias < 0 ? '#991b1b' : urgente ? '#ef4444' : '#10b981', color: '#ffffff'
+                            }}>
+                              {dias < 0 ? `Vencido hace ${Math.abs(dias)}d` : dias === 0 ? '¡Vence HOY!' : `Vence en ${dias} días`}
+                            </span>
+                            {expandido ? <ChevronUp size={18} color={textoSecundario} /> : <ChevronDown size={18} color={textoSecundario} />}
+                          </div>
                         </div>
 
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-                          <span style={{
-                            fontSize: 11, fontWeight: 800, padding: '4px 10px', borderRadius: 20,
-                            background: dias < 0 ? '#991b1b' : urgente ? '#ef4444' : '#10b981', color: '#fff'
-                          }}>
-                            {dias < 0 ? `Vencido hace ${Math.abs(dias)}d` : dias === 0 ? '¡Vence HOY!' : `Vence en ${dias} días`}
-                          </span>
-                          {expandido ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                        </div>
+                        {/* Panel desplegable con alto contraste */}
+                        {expandido && (
+                          <div style={{ padding: '16px', background: bgDetalle, borderTop: `1px solid ${bordeFila}` }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(145px, 1fr))', gap: 10, marginBottom: 14 }}>
+                              <div style={{ background: bgCajaDato, padding: '10px 12px', borderRadius: 8, border: `1px solid ${bordeFila}` }}>
+                                <span style={{ fontSize: 11, color: textoSecundario, display: 'block', marginBottom: 3 }}>📅 Fecha de Compra</span>
+                                <strong style={{ fontSize: 13, color: textoPrincipal }}>
+                                  {s.ventas?.created_at ? new Date(s.ventas.created_at).toLocaleDateString('es-PE') : 'N/A'}
+                                </strong>
+                              </div>
+
+                              <div style={{ background: bgCajaDato, padding: '10px 12px', borderRadius: 8, border: `1px solid ${bordeFila}` }}>
+                                <span style={{ fontSize: 11, color: textoSecundario, display: 'block', marginBottom: 3 }}>⏳ Fecha de Vencimiento</span>
+                                <strong style={{ fontSize: 13, color: '#f87171' }}>
+                                  {s.fecha_vencimiento}
+                                </strong>
+                              </div>
+
+                              <div style={{ background: bgCajaDato, padding: '10px 12px', borderRadius: 8, border: `1px solid ${bordeFila}` }}>
+                                <span style={{ fontSize: 11, color: textoSecundario, display: 'block', marginBottom: 3 }}>🌐 Plataforma de Venta</span>
+                                <strong style={{ fontSize: 13, color: textoPrincipal }}>
+                                  {s.plataforma_venta || 'WhatsApp'}
+                                </strong>
+                              </div>
+
+                              <div style={{ background: bgCajaDato, padding: '10px 12px', borderRadius: 8, border: `1px solid ${bordeFila}` }}>
+                                <span style={{ fontSize: 11, color: textoSecundario, display: 'block', marginBottom: 3 }}>⚡ Tiempo Contratado</span>
+                                <strong style={{ fontSize: 13, color: '#38bdf8' }}>
+                                  {s.duracion_meses || 1} meses
+                                </strong>
+                              </div>
+
+                              <div style={{ background: bgCajaDato, padding: '10px 12px', borderRadius: 8, border: `1px solid ${bordeFila}` }}>
+                                <span style={{ fontSize: 11, color: textoSecundario, display: 'block', marginBottom: 3 }}>💰 Precio Pagado</span>
+                                <strong style={{ fontSize: 14, color: '#a855f7' }}>
+                                  S/ {Number(s.subtotal).toFixed(2)}
+                                </strong>
+                              </div>
+                            </div>
+
+                            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                              <button
+                                onClick={() => setModalRenovar(s)}
+                                className="btn-primary"
+                                style={{ background: 'linear-gradient(135deg, #7c3aed, #06b6d4)', border: 'none', fontSize: 12, padding: '9px 16px' }}
+                              >
+                                <RefreshCw size={14} /> Renovar / Ver Mensaje para Usuario
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
+                    )
+                  })}
+                </div>
 
-                      {expandido && (
-                        <div style={{ padding: '14px 16px', background: '#f8fafc', borderTop: '1px solid var(--borde)', fontSize: 12 }}>
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 14 }}>
-                            <div><b>Fecha de Compra:</b><br/>{s.ventas?.created_at ? new Date(s.ventas.created_at).toLocaleDateString('es-PE') : 'N/A'}</div>
-                            <div><b>Fecha de Vencimiento:</b><br/><span style={{ color: '#dc2626', fontWeight: 700 }}>{s.fecha_vencimiento}</span></div>
-                            <div><b>Plataforma de Venta:</b><br/>{s.plataforma_venta || 'WhatsApp'}</div>
-                            <div><b>Tiempo Contratado:</b><br/>{s.duracion_meses || 1} meses</div>
-                            <div><b>Precio Vendido:</b><br/><span style={{ color: '#7c3aed', fontWeight: 700 }}>S/ {Number(s.subtotal).toFixed(2)}</span></div>
-                          </div>
-
-                          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                            <button onClick={() => setModalRenovar(s)} className="btn-primary" style={{ background: 'linear-gradient(135deg, #7c3aed, #06b6d4)', border: 'none', fontSize: 12 }}>
-                              <RefreshCw size={14} /> Renovar / Ver Mensaje para Usuario
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-              <Paginador
-                totalItems={suscripciones.length}
-                itemsPorPagina={itemsPorPagina}
-                setItemsPorPagina={setItemsPorPagina}
-                paginaActual={paginaActual}
-                setPaginaActual={setPaginaActual}
-                esMiller={true}
-              />
+                <Paginador
+                  totalItems={suscripciones.length}
+                  itemsPorPagina={itemsPorPagina}
+                  setItemsPorPagina={setItemsPorPagina}
+                  paginaActual={paginaActual}
+                  setPaginaActual={setPaginaActual}
+                  esMiller={true}
+                />
               </>
             )
           ) : (
             /* Vista de Servicios / Cuentas Madre Próximas a Vencer */
             cuentasMadre.length === 0 ? (
-              <p style={{ textAlign: 'center', padding: '30px 0', color: 'var(--texto-suave)', fontSize: 13 }}>
+              <p style={{ textAlign: 'center', padding: '30px 0', color: textoSecundario, fontSize: 13 }}>
                 No hay cuentas madre o servicios registrados en Compras de Miller Digital.
               </p>
             ) : (
@@ -265,30 +331,50 @@ export default function AdminDashboard() {
                   const expandido = expandidoId === m.id
 
                   return (
-                    <div key={m.id} style={{ border: `1.5px solid ${dias <= 7 ? '#f87171' : 'var(--borde)'}`, borderRadius: 10, background: dias <= 7 ? '#fef2f2' : '#fff', overflow: 'hidden' }}>
-                      <div onClick={() => setExpandidoId(expandido ? null : m.id)} style={{ padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
+                    <div key={m.id} style={{
+                      border: `1.5px solid ${dias <= 7 ? '#ef4444' : bordeFila}`,
+                      borderRadius: 12,
+                      background: dias <= 7 ? bgFilaUrgente : bgFila,
+                      overflow: 'hidden'
+                    }}>
+                      <div onClick={() => setExpandidoId(expandido ? null : m.id)} style={{ padding: '14px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', gap: 12 }}>
                         <div>
-                          <p style={{ fontWeight: 700, fontSize: 14 }}>{m.servicio_nombre || m.empresa}</p>
-                          <p style={{ fontSize: 12, color: 'var(--texto-suave)' }}>
-                            🔑 Cuenta: <b>{m.cuenta_correo || 'S/C'}</b> · 👥 Cupos libres: <b>{libres} de {m.cupos_totales || 1}</b>
+                          <p style={{ fontWeight: 800, fontSize: 15, color: textoPrincipal }}>{m.servicio_nombre || m.empresa}</p>
+                          <p style={{ fontSize: 12, color: textoSecundario, marginTop: 4 }}>
+                            🔑 Cuenta: <b style={{ color: textoPrincipal }}>{m.cuenta_correo || 'S/C'}</b> &nbsp;·&nbsp; 👥 Cupos libres: <b style={{ color: '#38bdf8' }}>{libres} de {m.cupos_totales || 1}</b>
                           </p>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <span style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 20, background: dias <= 7 ? '#ef4444' : '#0891b2', color: '#fff' }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, padding: '5px 12px', borderRadius: 20, background: dias <= 7 ? '#ef4444' : '#0891b2', color: '#fff' }}>
                             Vence: {m.fecha_vencimiento || 'Sin fecha'} ({dias}d)
                           </span>
-                          {expandido ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                          {expandido ? <ChevronUp size={18} color={textoSecundario} /> : <ChevronDown size={18} color={textoSecundario} />}
                         </div>
                       </div>
 
                       {expandido && (
-                        <div style={{ padding: '14px 16px', background: '#f8fafc', borderTop: '1px solid var(--borde)', fontSize: 12 }}>
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
-                            <div><b>Proveedor:</b><br/>{m.empresa}</div>
-                            <div><b>WhatsApp Proveedor:</b><br/>{m.proveedor_whatsapp || 'S/N'}</div>
-                            <div><b>Plataforma Compra:</b><br/>{m.plataforma_compra || 'Directo'}</div>
-                            <div><b>Costo Pagado:</b><br/>S/ {Number(m.total).toFixed(2)}</div>
-                            <div><b>Fecha Compra:</b><br/>{m.fecha_compra}</div>
+                        <div style={{ padding: '16px', background: bgDetalle, borderTop: `1px solid ${bordeFila}` }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(145px, 1fr))', gap: 10 }}>
+                            <div style={{ background: bgCajaDato, padding: '10px 12px', borderRadius: 8, border: `1px solid ${bordeFila}` }}>
+                              <span style={{ fontSize: 11, color: textoSecundario, display: 'block', marginBottom: 3 }}>👤 Proveedor</span>
+                              <strong style={{ fontSize: 13, color: textoPrincipal }}>{m.empresa}</strong>
+                            </div>
+                            <div style={{ background: bgCajaDato, padding: '10px 12px', borderRadius: 8, border: `1px solid ${bordeFila}` }}>
+                              <span style={{ fontSize: 11, color: textoSecundario, display: 'block', marginBottom: 3 }}>📱 WhatsApp Proveedor</span>
+                              <strong style={{ fontSize: 13, color: textoPrincipal }}>{m.proveedor_whatsapp || 'S/N'}</strong>
+                            </div>
+                            <div style={{ background: bgCajaDato, padding: '10px 12px', borderRadius: 8, border: `1px solid ${bordeFila}` }}>
+                              <span style={{ fontSize: 11, color: textoSecundario, display: 'block', marginBottom: 3 }}>🌐 Plataforma Compra</span>
+                              <strong style={{ fontSize: 13, color: textoPrincipal }}>{m.plataforma_compra || 'Directo'}</strong>
+                            </div>
+                            <div style={{ background: bgCajaDato, padding: '10px 12px', borderRadius: 8, border: `1px solid ${bordeFila}` }}>
+                              <span style={{ fontSize: 11, color: textoSecundario, display: 'block', marginBottom: 3 }}>💰 Costo Pagado</span>
+                              <strong style={{ fontSize: 13, color: '#10b981' }}>S/ {Number(m.total).toFixed(2)}</strong>
+                            </div>
+                            <div style={{ background: bgCajaDato, padding: '10px 12px', borderRadius: 8, border: `1px solid ${bordeFila}` }}>
+                              <span style={{ fontSize: 11, color: textoSecundario, display: 'block', marginBottom: 3 }}>📅 Fecha Compra</span>
+                              <strong style={{ fontSize: 13, color: textoPrincipal }}>{m.fecha_compra}</strong>
+                            </div>
                           </div>
                         </div>
                       )}
@@ -301,14 +387,16 @@ export default function AdminDashboard() {
 
           {/* Modal para Enviar Mensaje de Renovación y Extender Fecha */}
           {modalRenovar && (
-            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-              <div className="card" style={{ width: '100%', maxWidth: 500, padding: 24 }}>
-                <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 8 }}>📲 Texto de Renovación para {modalRenovar.cliente_nombre}</h3>
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+              <div className="card" style={{ width: '100%', maxWidth: 500, padding: 24, border: `1px solid ${bordeFila}` }}>
+                <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 10, color: textoPrincipal }}>
+                  📲 Texto de Renovación para {modalRenovar.cliente_nombre}
+                </h3>
                 <textarea
                   readOnly
                   rows={7}
                   value={generarTextoRenovacion(modalRenovar)}
-                  style={{ width: '100%', fontSize: 12, padding: 10, borderRadius: 8, border: '1px solid var(--borde)', background: '#f8fafc', marginBottom: 12 }}
+                  style={{ width: '100%', fontSize: 12, padding: 12, borderRadius: 8, border: `1px solid ${bordeFila}`, background: bgDetalle, color: textoPrincipal, marginBottom: 12 }}
                 />
                 <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
                   <button
@@ -326,8 +414,10 @@ export default function AdminDashboard() {
                   )}
                 </div>
 
-                <div style={{ borderTop: '1px solid var(--borde)', paddingTop: 14 }}>
-                  <label style={{ fontSize: 12, fontWeight: 700, display: 'block', marginBottom: 6 }}>¿Confirmar renovación de fecha en el sistema?</label>
+                <div style={{ borderTop: `1px solid ${bordeFila}`, paddingTop: 14 }}>
+                  <label style={{ fontSize: 12, fontWeight: 700, display: 'block', marginBottom: 6, color: textoPrincipal }}>
+                    ¿Confirmar renovación de fecha en el sistema?
+                  </label>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <select value={mesesRenovar} onChange={e => setMesesRenovar(e.target.value)} style={{ flex: 1, fontSize: 13 }}>
                       <option value={1}>+ 1 Mes</option>
@@ -347,7 +437,7 @@ export default function AdminDashboard() {
           )}
         </div>
       ) : (
-        /* ==================== MODO RICHARD EXPRESS: STOCK BAJO Y AGOTADOS (INTACTO) ==================== */
+        /* ==================== MODO RICHARD EXPRESS: STOCK BAJO Y AGOTADOS (ADAPTADO A MODO OSCURO) ==================== */
         <>
           {hayAlertas && (
             <div style={{ marginBottom: 16, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -366,24 +456,27 @@ export default function AdminDashboard() {
           {bajFiltrado.length > 0 && (
             <div className="card" style={{ padding: '18px 20px', marginBottom: 14 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-                <AlertTriangle size={18} color="#E65100" />
-                <h2 style={{ fontSize: 16, fontWeight: 600, color: '#E65100' }}>Stock bajo — quedan solo 1</h2>
+                <AlertTriangle size={18} color="#f59e0b" />
+                <h2 style={{ fontSize: 16, fontWeight: 600, color: '#f59e0b' }}>Stock bajo — quedan solo 1</h2>
                 <span style={{ fontSize: 12, color: 'var(--texto-suave)', marginLeft: 4 }}>· Clic para editar</span>
                 <span className="badge badge-naranja" style={{ marginLeft: 'auto' }}>{bajFiltrado.length}</span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {bajFiltrado.map(p => (
                   <button key={p.id} onClick={() => irAEditar(p.id)}
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: '#FFF3E0', borderRadius: 8, border: '1px solid #FFCC80', cursor: 'pointer', transition: 'all 0.15s', width: '100%', textAlign: 'left' }}
-                    onMouseEnter={e => { e.currentTarget.style.background = '#FFE0B2'; e.currentTarget.style.borderColor = 'var(--naranja)' }}
-                    onMouseLeave={e => { e.currentTarget.style.background = '#FFF3E0'; e.currentTarget.style.borderColor = '#FFCC80' }}>
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px',
+                      background: modoOscuro ? 'rgba(245, 158, 11, 0.12)' : '#FFF3E0',
+                      borderRadius: 8, border: `1px solid ${modoOscuro ? 'rgba(245, 158, 11, 0.35)' : '#FFCC80'}`,
+                      cursor: 'pointer', transition: 'all 0.15s', width: '100%', textAlign: 'left', color: textoPrincipal
+                    }}>
                     <div>
-                      <span style={{ fontSize: 13, fontWeight: 500 }}>{p.nombre}</span>
-                      {p.categorias?.nombre && <span style={{ fontSize: 11, color: 'var(--texto-suave)', marginLeft: 8 }}>· {p.categorias.nombre}</span>}
+                      <span style={{ fontSize: 13, fontWeight: 600 }}>{p.nombre}</span>
+                      {p.categorias?.nombre && <span style={{ fontSize: 11, color: textoSecundario, marginLeft: 8 }}>· {p.categorias.nombre}</span>}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <span className="badge badge-naranja">Stock: {p.stock}</span>
-                      <span style={{ fontSize: 11, color: 'var(--naranja)', fontWeight: 500 }}>✏️ Editar →</span>
+                      <span style={{ fontSize: 11, color: '#f59e0b', fontWeight: 600 }}>✏️ Editar →</span>
                     </div>
                   </button>
                 ))}
@@ -394,24 +487,27 @@ export default function AdminDashboard() {
           {ceroFiltrado.length > 0 && (
             <div className="card" style={{ padding: '18px 20px', marginBottom: 14 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-                <XCircle size={18} color="#C62828" />
-                <h2 style={{ fontSize: 16, fontWeight: 600, color: '#C62828' }}>Sin stock — agotados</h2>
+                <XCircle size={18} color="#ef4444" />
+                <h2 style={{ fontSize: 16, fontWeight: 600, color: '#ef4444' }}>Sin stock — agotados</h2>
                 <span style={{ fontSize: 12, color: 'var(--texto-suave)', marginLeft: 4 }}>· Clic para editar</span>
                 <span className="badge badge-rojo" style={{ marginLeft: 'auto' }}>{ceroFiltrado.length}</span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {ceroFiltrado.map(p => (
                   <button key={p.id} onClick={() => irAEditar(p.id)}
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: '#FFEBEE', borderRadius: 8, border: '1px solid #FFCDD2', cursor: 'pointer', transition: 'all 0.15s', width: '100%', textAlign: 'left' }}
-                    onMouseEnter={e => { e.currentTarget.style.background = '#FFCDD2'; e.currentTarget.style.borderColor = '#C62828' }}
-                    onMouseLeave={e => { e.currentTarget.style.background = '#FFEBEE'; e.currentTarget.style.borderColor = '#FFCDD2' }}>
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px',
+                      background: modoOscuro ? 'rgba(239, 68, 68, 0.12)' : '#FFEBEE',
+                      borderRadius: 8, border: `1px solid ${modoOscuro ? 'rgba(239, 68, 68, 0.35)' : '#FFCDD2'}`,
+                      cursor: 'pointer', transition: 'all 0.15s', width: '100%', textAlign: 'left', color: textoPrincipal
+                    }}>
                     <div>
-                      <span style={{ fontSize: 13, fontWeight: 500 }}>{p.nombre}</span>
-                      {p.categorias?.nombre && <span style={{ fontSize: 11, color: 'var(--texto-suave)', marginLeft: 8 }}>· {p.categorias.nombre}</span>}
+                      <span style={{ fontSize: 13, fontWeight: 600 }}>{p.nombre}</span>
+                      {p.categorias?.nombre && <span style={{ fontSize: 11, color: textoSecundario, marginLeft: 8 }}>· {p.categorias.nombre}</span>}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <span className="badge badge-rojo">Agotado</span>
-                      <span style={{ fontSize: 11, color: '#C62828', fontWeight: 500 }}>✏️ Editar →</span>
+                      <span style={{ fontSize: 11, color: '#ef4444', fontWeight: 600 }}>✏️ Editar →</span>
                     </div>
                   </button>
                 ))}
@@ -422,12 +518,12 @@ export default function AdminDashboard() {
           {inactivosFiltrado.length > 0 && (
             <div className="card" style={{ padding: '18px 20px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: verInactivos ? 14 : 0 }}>
-                <EyeOff size={18} color="#666" />
-                <h2 style={{ fontSize: 16, fontWeight: 600, color: '#555' }}>Productos inactivos</h2>
-                <span style={{ fontSize: 12, color: 'var(--texto-suave)', marginLeft: 4 }}>· No visibles en la tienda</span>
+                <EyeOff size={18} color={textoSecundario} />
+                <h2 style={{ fontSize: 16, fontWeight: 600, color: textoPrincipal }}>Productos inactivos</h2>
+                <span style={{ fontSize: 12, color: textoSecundario, marginLeft: 4 }}>· No visibles en la tienda</span>
                 <span className="badge badge-gris" style={{ marginLeft: 'auto' }}>{inactivosFiltrado.length}</span>
                 <button onClick={() => setVerInactivos(!verInactivos)}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--naranja)', fontWeight: 500, marginLeft: 4 }}>
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--naranja)', fontWeight: 600, marginLeft: 4 }}>
                   {verInactivos ? 'Ocultar' : 'Ver todos'}
                 </button>
               </div>
@@ -435,17 +531,19 @@ export default function AdminDashboard() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {inactivosFiltrado.map(p => (
                     <button key={p.id} onClick={() => irAEditar(p.id)}
-                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: '#F5F5F5', borderRadius: 8, border: '1px solid #E0E0E0', cursor: 'pointer', transition: 'all 0.15s', width: '100%', textAlign: 'left' }}
-                      onMouseEnter={e => { e.currentTarget.style.background = '#EEEEEE'; e.currentTarget.style.borderColor = '#BDBDBD' }}
-                      onMouseLeave={e => { e.currentTarget.style.background = '#F5F5F5'; e.currentTarget.style.borderColor = '#E0E0E0' }}>
+                      style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px',
+                        background: bgFila, borderRadius: 8, border: `1px solid ${bordeFila}`,
+                        cursor: 'pointer', transition: 'all 0.15s', width: '100%', textAlign: 'left', color: textoPrincipal
+                      }}>
                       <div>
-                        <span style={{ fontSize: 13, fontWeight: 500, color: '#555' }}>{p.nombre}</span>
-                        {p.categorias?.nombre && <span style={{ fontSize: 11, color: 'var(--texto-suave)', marginLeft: 8 }}>· {p.categorias.nombre}</span>}
+                        <span style={{ fontSize: 13, fontWeight: 500 }}>{p.nombre}</span>
+                        {p.categorias?.nombre && <span style={{ fontSize: 11, color: textoSecundario, marginLeft: 8 }}>· {p.categorias.nombre}</span>}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         {Number(p.precio || 0) === 0 && <span className="badge badge-rojo">Sin precio</span>}
                         {p.stock <= 0 && <span className="badge badge-gris">Sin stock</span>}
-                        <span style={{ fontSize: 11, color: '#777', fontWeight: 500 }}>✏️ Editar →</span>
+                        <span style={{ fontSize: 11, color: textoSecundario, fontWeight: 600 }}>✏️ Editar →</span>
                       </div>
                     </button>
                   ))}
