@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ShoppingCart, Search, LogIn, LayoutDashboard, Store, Cpu, User } from 'lucide-react'
+import { ShoppingCart, Search, LogIn, LayoutDashboard, Store, Cpu, User, Moon, Sun } from 'lucide-react'
 import { useCarrito, useAuth, useTienda } from '../store'
 import { supabase } from '../lib/supabase'
 import toast from 'react-hot-toast'
@@ -9,9 +9,13 @@ export default function Navbar({ onBuscar }) {
   const [busqueda, setBusqueda] = useState('')
   const items = useCarrito(s => s.items)
   const { perfil, usuario } = useAuth()
-  const { tiendaActual, cambiarTienda } = useTienda()
+  const { tiendaActual, cambiarTienda, modoOscuro, toggleModoOscuro } = useTienda()
   const esMiller = tiendaActual === 'miller'
   const navigate = useNavigate()
+
+  useEffect(() => {
+    document.body.classList.toggle('dark-mode', modoOscuro)
+  }, [modoOscuro])
 
   const totalItems = items.reduce((a, i) => a + i.cantidad, 0)
 
@@ -37,7 +41,7 @@ export default function Navbar({ onBuscar }) {
 
   return (
     <header style={{
-      background: esMiller ? 'rgba(15, 23, 42, 0.95)' : 'var(--blanco)',
+      background: modoOscuro ? 'rgba(15, 23, 42, 0.95)' : 'var(--blanco)',
       borderBottom: esMiller ? '1px solid rgba(124, 58, 237, 0.35)' : '1px solid var(--borde)',
       position: 'sticky', top: 0, zIndex: 100,
       boxShadow: esMiller ? '0 4px 20px rgba(124, 58, 237, 0.15)' : '0 2px 8px rgba(0,0,0,0.06)',
@@ -54,7 +58,7 @@ export default function Navbar({ onBuscar }) {
           }}>
             {esMiller ? <Cpu size={20} color="white" /> : <Store size={20} color="white" />}
           </div>
-          <span style={{ fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 15, color: esMiller ? '#ffffff' : 'var(--texto)', lineHeight: 1.1 }}>
+          <span style={{ fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 15, color: 'var(--texto)', lineHeight: 1.1 }}>
             {esMiller ? 'Miller' : 'Richard'}<br />
             <span style={{ color: esMiller ? '#06b6d4' : 'var(--naranja)', fontSize: 11, fontWeight: 600 }}>
               {esMiller ? 'Digital Store' : 'Express Market'}
@@ -62,11 +66,11 @@ export default function Navbar({ onBuscar }) {
           </span>
         </Link>
 
-        {/* Selector de Tienda en Vivo */}
+        {/* Selector de Tienda */}
         <div style={{
           display: 'flex', alignItems: 'center', gap: 4, padding: 3, borderRadius: 20,
-          background: esMiller ? '#1e293b' : 'var(--fondo)',
-          border: esMiller ? '1px solid rgba(6, 182, 212, 0.3)' : '1px solid var(--borde)'
+          background: 'var(--fondo)',
+          border: '1px solid var(--borde)'
         }}>
           <button
             type="button"
@@ -74,7 +78,7 @@ export default function Navbar({ onBuscar }) {
             style={{
               display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 16, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, transition: '0.2s',
               background: !esMiller ? 'var(--naranja)' : 'transparent',
-              color: !esMiller ? '#fff' : '#94a3b8'
+              color: !esMiller ? '#fff' : 'var(--texto-suave)'
             }}>
             <Store size={12} /> Richard Market
           </button>
@@ -90,18 +94,18 @@ export default function Navbar({ onBuscar }) {
           </button>
         </div>
 
-        {/* Buscador exclusivo de la tienda activa */}
+        {/* Buscador */}
         {onBuscar && (
           <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center', maxWidth: 420, minWidth: 160, margin: '0 auto' }}>
-            <Search size={16} style={{ position: 'absolute', left: 12, color: esMiller ? '#94a3b8' : 'var(--texto-suave)' }} />
+            <Search size={16} style={{ position: 'absolute', left: 12, color: 'var(--texto-suave)' }} />
             <input
               value={busqueda}
               onChange={handleBuscar}
               placeholder={esMiller ? "Buscar en Miller Digital (Canva, Google, HBO...)" : "Buscar en Richard Express Market..."}
               style={{
                 paddingLeft: 38, borderRadius: 24,
-                background: esMiller ? '#1e293b' : 'var(--fondo)',
-                color: esMiller ? '#fff' : 'var(--texto)',
+                background: 'var(--fondo)',
+                color: 'var(--texto)',
                 border: esMiller ? '1.5px solid rgba(124, 58, 237, 0.4)' : '1.5px solid var(--borde)',
                 width: '100%'
               }}
@@ -110,6 +114,19 @@ export default function Navbar({ onBuscar }) {
         )}
 
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+          {/* Botón Modo Oscuro / Claro */}
+          <button
+            type="button"
+            onClick={toggleModoOscuro}
+            title={modoOscuro ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+            style={{
+              width: 38, height: 38, borderRadius: 10, border: '1px solid var(--borde)',
+              background: 'var(--fondo)', color: modoOscuro ? '#fbbf24' : 'var(--texto-suave)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer'
+            }}>
+            {modoOscuro ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
+
           {perfil?.rol === 'admin' && (
             <Link to="/admin" style={{
               display: 'flex', alignItems: 'center', gap: 5, fontSize: 12,
@@ -130,8 +147,8 @@ export default function Navbar({ onBuscar }) {
               <Link to="/mi-cuenta" style={{
                 display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600,
                 padding: '6px 10px', borderRadius: 8,
-                background: esMiller ? 'rgba(124, 58, 237, 0.2)' : 'var(--fondo)',
-                color: esMiller ? '#f8fafc' : 'var(--texto)',
+                background: 'var(--fondo)',
+                color: 'var(--texto)',
                 border: '1px solid var(--borde)', textDecoration: 'none'
               }}>
                 {perfil?.avatar_url ? (
@@ -141,12 +158,12 @@ export default function Navbar({ onBuscar }) {
                 )}
                 Mi Cuenta
               </Link>
-              <button onClick={handleLogout} className="btn-ghost" style={{ padding: '7px 10px', fontSize: 12, color: esMiller ? '#cbd5e1' : 'inherit' }}>
+              <button onClick={handleLogout} className="btn-ghost" style={{ padding: '7px 10px', fontSize: 12 }}>
                 Salir
               </button>
             </>
           ) : (
-            <Link to="/login" className="btn-ghost" style={{ padding: '7px 12px', fontSize: 12, color: esMiller ? '#fff' : 'inherit' }}>
+            <Link to="/login" className="btn-ghost" style={{ padding: '7px 12px', fontSize: 12 }}>
               <LogIn size={14} /> Ingresar
             </Link>
           )}
@@ -154,9 +171,9 @@ export default function Navbar({ onBuscar }) {
           <Link to="/carrito" style={{
             position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center',
             width: 40, height: 40, borderRadius: 10,
-            background: totalItems > 0 ? (esMiller ? 'rgba(124, 58, 237, 0.25)' : 'var(--naranja-light)') : (esMiller ? '#1e293b' : 'var(--fondo)'),
+            background: totalItems > 0 ? (esMiller ? 'rgba(124, 58, 237, 0.25)' : 'var(--naranja-light)') : 'var(--fondo)',
             border: esMiller ? '1.5px solid rgba(6, 182, 212, 0.4)' : '1.5px solid var(--borde)',
-            color: totalItems > 0 ? (esMiller ? '#06b6d4' : 'var(--naranja)') : (esMiller ? '#94a3b8' : 'var(--texto-suave)'),
+            color: totalItems > 0 ? (esMiller ? '#06b6d4' : 'var(--naranja)') : 'var(--texto-suave)',
             transition: 'all 0.2s'
           }}>
             <ShoppingCart size={19} />
