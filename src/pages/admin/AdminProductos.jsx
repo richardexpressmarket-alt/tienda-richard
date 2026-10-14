@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { useTienda } from '../../store'
 import { Plus, Pencil, Trash2, Upload, X, Package, Search, Download, Cpu } from 'lucide-react'
 import { exportarCSV } from '../../lib/exportar'
+import Paginador from '../../components/Paginador'
 import toast from 'react-hot-toast'
 
 const vacioForm = {
