@@ -304,6 +304,15 @@ const [paginaActual, setPaginaActual] = useState(1)
             </div>
           ))}
         </div>
+        <Paginador
+          totalItems={filtrados.length}
+          itemsPorPagina={itemsPorPagina}
+          setItemsPorPagina={setItemsPorPagina}
+          paginaActual={paginaActual}
+          setPaginaActual={setPaginaActual}
+          esMiller={esMiller}
+        />
+        </>
       )}
 
       {/* Modal */}
