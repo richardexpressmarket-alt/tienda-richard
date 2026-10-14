@@ -268,8 +268,9 @@ const [paginaActual, setPaginaActual] = useState(1)
       <p style={{ fontSize: 13, color: 'var(--texto-suave)', marginBottom: 14 }}>{filtrados.length} {esMiller ? 'servicios' : 'productos'}</p>
 
       {cargando ? <div className="spinner" /> : (
+        <>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {filtrados.map(p => (
+          {filtradosPaginados.map(p => (
             <div key={p.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 16px' }}>
               {p.imagen_url
                 ? <img src={p.imagen_url} alt={p.nombre} style={{ width: 52, height: 52, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }} />
