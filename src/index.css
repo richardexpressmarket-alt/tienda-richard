@@ -153,3 +153,45 @@ img { max-width: 100%; display: block; }
   /* Cards de producto más compactas */
   .card { border-radius: 10px !important; }
 }
+/* =========================================================
+   MODO OSCURO GLOBAL (RICHARD EXPRESS & MILLER DIGITAL)
+   ========================================================= */
+body.dark-mode {
+  --fondo: #0b0f19;
+  --blanco: #111827;
+  --texto: #f8fafc;
+  --texto-suave: #94a3b8;
+  --borde: #1e293b;
+  --naranja-light: rgba(255, 107, 0, 0.16);
+  --naranja-mid: rgba(255, 107, 0, 0.35);
+  --naranja-dark: #fb923c;
+  --sombra: 0 4px 16px rgba(0, 0, 0, 0.45);
+  --sombra-hover: 0 10px 25px rgba(0, 0, 0, 0.65);
+  background-color: var(--fondo) !important;
+  color: var(--texto) !important;
+}
+
+body.dark-mode .card {
+  background-color: #111827 !important;
+  border-color: #1e293b !important;
+  color: #f8fafc !important;
+}
+
+body.dark-mode input,
+body.dark-mode select,
+body.dark-mode textarea {
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+  border-color: #334155 !important;
+}
+
+body.dark-mode input::placeholder,
+body.dark-mode textarea::placeholder {
+  color: #64748b !important;
+}
+
+body.dark-mode table th,
+body.dark-mode table td {
+  color: #e2e8f0 !important;
+  border-color: #1e293b !important;
+}
