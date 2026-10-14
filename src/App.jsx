@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import { supabase } from './lib/supabase'
 import { useAuth } from './store'
 
@@ -7,6 +7,7 @@ import Inicio from './pages/Inicio'
 import Categoria from './pages/Categoria'
 import Carrito from './pages/Carrito'
 import Login from './pages/Login'
+import MiCuenta from './pages/MiCuenta'
 import AdminLayout from './pages/admin/AdminLayout'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import AdminProductos from './pages/admin/AdminProductos'
@@ -23,7 +24,6 @@ import AdminCompraDetalle from './pages/admin/AdminCompraDetalle'
 import AdminCalculador from './pages/admin/AdminCalculador'
 import VendedorLayout from './pages/vendedor/VendedorLayout'
 import VendedorVenta from './pages/vendedor/VendedorVenta'
-import { Navigate } from 'react-router-dom'
 
 function RutaProtegida({ children, rol }) {
   const { perfil } = useAuth()
@@ -65,6 +65,7 @@ export default function App() {
       <Route path="/categoria/:id" element={<Categoria />} />
       <Route path="/carrito" element={<Carrito />} />
       <Route path="/login" element={<Login />} />
+      <Route path="/mi-cuenta" element={<MiCuenta />} />
 
       {/* RUTAS PROTEGIDAS — solo admin */}
       <Route path="/admin" element={
@@ -80,7 +81,7 @@ export default function App() {
         <Route path="precios" element={<AdminPrecios />} />
         <Route path="compras" element={<AdminCompras />} />
         <Route path="inventario" element={<AdminInventario />} />
-<Route path="compras/:id" element={<AdminCompraDetalle />} />
+        <Route path="compras/:id" element={<AdminCompraDetalle />} />
         <Route path="calculador" element={<AdminCalculador />} />
         <Route path="usuarios" element={<AdminUsuarios />} />
       </Route>
