@@ -730,43 +730,46 @@ export default function AdminVentas() {
                 </div>
               </div>
 
-              <div style={{ background: '#f8fafc', padding: 12, borderRadius: 8, border: '1px solid var(--borde)' }}>
-                <label style={{ fontSize: 11, fontWeight: 700, display: 'block', marginBottom: 6 }}>
+              <div style={{ background: 'var(--fondo)', padding: 14, borderRadius: 10, border: '1px solid var(--borde)' }}>
+                <label style={{ fontSize: 11, fontWeight: 700, display: 'block', marginBottom: 8, color: 'var(--texto)' }}>
                   ⚡ Planes Rápidos (Calcula el vencimiento automático):
                 </label>
-                <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
                   {[
                     { m: 1, p: '2.00', label: '1 Mes' },
                     { m: 3, p: '3.00', label: '3 Meses (S/3)' },
                     { m: 6, p: '5.00', label: '6 Meses (S/5)' },
                     { m: 12, p: '8.00', label: '12 Meses (S/8)' }
-                  ].map(plan => (
-                    <button 
-                      key={plan.m} type="button"
-                      onClick={() => setFormDigital({ ...formDigital, duracion_meses: plan.m, precio: plan.p })}
-                      style={{
-                        padding: '6px 10px', fontSize: 11, fontWeight: 700, borderRadius: 6, cursor: 'pointer',
-                        border: Number(formDigital.duracion_meses) === plan.m ? '2px solid #7c3aed' : '1px solid var(--borde)',
-                        background: Number(formDigital.duracion_meses) === plan.m ? '#7c3aed15' : '#fff',
-                        color: Number(formDigital.duracion_meses) === plan.m ? '#7c3aed' : 'var(--texto)'
-                      }}>
-                      {plan.label}
-                    </button>
-                  ))}
+                  ].map(plan => {
+                    const seleccionado = Number(formDigital.duracion_meses) === plan.m
+                    return (
+                      <button 
+                        key={plan.m} type="button"
+                        onClick={() => setFormDigital({ ...formDigital, duracion_meses: plan.m, precio: plan.p })}
+                        style={{
+                          padding: '7px 12px', fontSize: 11, fontWeight: 700, borderRadius: 8, cursor: 'pointer', transition: '0.15s',
+                          border: seleccionado ? '2px solid #06b6d4' : '1px solid var(--borde)',
+                          background: seleccionado ? 'linear-gradient(135deg, rgba(124, 58, 237, 0.35), rgba(6, 182, 212, 0.25))' : 'var(--blanco)',
+                          color: seleccionado ? '#38bdf8' : 'var(--texto)'
+                        }}>
+                        {plan.label}
+                      </button>
+                    )
+                  })}
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
                   <div>
-                    <label style={{ fontSize: 10, fontWeight: 600 }}>Fecha Inicio</label>
+                    <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--texto-suave)', display: 'block', marginBottom: 4 }}>Fecha Inicio</label>
                     <input type="date" value={formDigital.fecha_compra} onChange={e => setFormDigital({ ...formDigital, fecha_compra: e.target.value })} style={{ fontSize: 12 }} />
                   </div>
                   <div>
-                    <label style={{ fontSize: 10, fontWeight: 600 }}>Meses</label>
+                    <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--texto-suave)', display: 'block', marginBottom: 4 }}>Meses</label>
                     <input type="number" min="1" value={formDigital.duracion_meses} onChange={e => setFormDigital({ ...formDigital, duracion_meses: e.target.value })} style={{ fontSize: 12 }} />
                   </div>
                   <div>
-                    <label style={{ fontSize: 10, fontWeight: 800, color: '#0891b2' }}>Vencimiento</label>
-                    <input type="date" value={formDigital.fecha_vencimiento} onChange={e => setFormDigital({ ...formDigital, fecha_vencimiento: e.target.value })} style={{ fontSize: 12, fontWeight: 700, border: '1px solid #06b6d4', background: '#ecfeff' }} />
+                    <label style={{ fontSize: 11, fontWeight: 800, color: '#06b6d4', display: 'block', marginBottom: 4 }}>Vencimiento</label>
+                    <input type="date" value={formDigital.fecha_vencimiento} onChange={e => setFormDigital({ ...formDigital, fecha_vencimiento: e.target.value })} style={{ fontSize: 12, fontWeight: 700, border: '1.5px solid #06b6d4' }} />
                   </div>
                 </div>
               </div>
