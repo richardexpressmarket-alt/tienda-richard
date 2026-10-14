@@ -203,6 +203,9 @@ export default function AdminProductos() {
     toast.success('Excel exportado ✅')
   }
 
+const [paginaActual, setPaginaActual] = useState(1)
+  const [itemsPorPagina, setItemsPorPagina] = useState(50)
+
   const filtrados = productos.filter(p => {
     const matchBusq   = p.nombre.toLowerCase().includes(busqueda.toLowerCase())
     const matchCat    = filtroCat ? p.categoria_id === filtroCat : true
@@ -210,6 +213,9 @@ export default function AdminProductos() {
     const matchStock  = filtroStock !== '' ? p.stock === Number(filtroStock) : true
     return matchBusq && matchCat && matchOferta && matchStock
   })
+
+  const limiteValido = Math.max(1, Number(itemsPorPagina) || 50)
+  const filtradosPaginados = filtrados.slice((paginaActual - 1) * limiteValido, paginaActual * limiteValido)
 
   const colorPrimario = esMiller ? '#7c3aed' : 'var(--naranja)'
 
