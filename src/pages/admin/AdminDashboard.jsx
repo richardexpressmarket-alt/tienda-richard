@@ -241,6 +241,15 @@ export default function AdminDashboard() {
                   )
                 })}
               </div>
+              <Paginador
+                totalItems={suscripciones.length}
+                itemsPorPagina={itemsPorPagina}
+                setItemsPorPagina={setItemsPorPagina}
+                paginaActual={paginaActual}
+                setPaginaActual={setPaginaActual}
+                esMiller={true}
+              />
+              </>
             )
           ) : (
             /* Vista de Servicios / Cuentas Madre Próximas a Vencer */
