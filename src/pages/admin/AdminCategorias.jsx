@@ -1,12 +1,16 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
-import { Plus, Pencil, Trash2, Upload, X, Package, Download } from 'lucide-react'
+import { useTienda } from '../../store'
+import { Plus, Pencil, Trash2, Upload, X, Package, Download, Cpu } from 'lucide-react'
 import { exportarCSV } from '../../lib/exportar'
 import toast from 'react-hot-toast'
 
 const vacioForm = { nombre: '', descripcion: '', orden: 0, activo: true }
 
 export default function AdminCategorias() {
+  const { tiendaActual } = useTienda()
+  const esMiller = tiendaActual === 'miller'
+
   const [categorias, setCategorias] = useState([])
   const [form, setForm]             = useState(vacioForm)
   const [editando, setEditando]     = useState(null)
@@ -17,11 +21,12 @@ export default function AdminCategorias() {
   const [imagenFile, setImagenFile] = useState(null)
   const inputRef = useRef()
 
-  useEffect(() => { cargar() }, [])
+  useEffect(() => { cargar() }, [tiendaActual])
 
   async function cargar() {
+    setCargando(true)
     const { data } = await supabase.from('categorias').select('*').order('orden')
-    setCategorias(data || [])
+    setCategorias((data || []).filter(c => (c.tienda || 'richard') === tiendaActual))
     setCargando(false)
   }
 
@@ -67,7 +72,7 @@ export default function AdminCategorias() {
     try {
       let imagen_url = editando?.imagen_url || null
       if (imagenFile) imagen_url = await subirImagen(imagenFile, form.nombre)
-      const payload = { ...form, imagen_url }
+      const payload = { ...form, imagen_url, tienda: tiendaActual }
       if (editando) {
         const { error } = await supabase.from('categorias').update(payload).eq('id', editando.id)
         if (error) throw error
@@ -95,7 +100,7 @@ export default function AdminCategorias() {
 
   function handleExportar() {
     if (categorias.length === 0) return toast.error('No hay categorías para exportar')
-    exportarCSV('categorias', [
+    exportarCSV(`categorias_${tiendaActual}`, [
       ['Nombre', 'Descripción', 'Orden', 'Activa'],
       ...categorias.map(c => [
         c.nombre, c.descripcion || '', c.orden, c.activo ? 'Sí' : 'No'
@@ -107,14 +112,14 @@ export default function AdminCategorias() {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-        <h1 style={{ fontFamily: 'var(--fuente-display)', fontSize: 24, fontWeight: 800 }}>
-          Categorías<span style={{ color: 'var(--naranja)' }}>.</span>
+        <h1 style={{ fontFamily: 'var(--fuente-display)', fontSize: 24, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
+          {esMiller ? <><Cpu size={24} color="#7c3aed" /> Categorías Digitales</> : <>Categorías<span style={{ color: 'var(--naranja)' }}>.</span></>}
         </h1>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={handleExportar} className="btn-ghost" style={{ fontSize: 13 }}>
             <Download size={14} /> Excel
           </button>
-          <button onClick={abrirNuevo} className="btn-primary">
+          <button onClick={abrirNuevo} className="btn-primary" style={{ background: esMiller ? 'linear-gradient(135deg, #7c3aed, #06b6d4)' : 'var(--naranja)', border: 'none' }}>
             <Plus size={16} /> Nueva categoría
           </button>
         </div>
@@ -167,11 +172,11 @@ export default function AdminCategorias() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
                 <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Nombre *</label>
-                <input value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej: Abarrotes" />
+                <input value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder={esMiller ? "Ej: Diseño & Creatividad" : "Ej: Abarrotes"} />
               </div>
               <div>
                 <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Descripción</label>
-                <input value={form.descripcion} onChange={e => setForm({ ...form, descripcion: e.target.value })} placeholder="Ej: Arroz, azúcar, aceite..." />
+                <input value={form.descripcion} onChange={e => setForm({ ...form, descripcion: e.target.value })} placeholder={esMiller ? "Ej: Canva Pro, Adobe, etc." : "Ej: Arroz, azúcar, aceite..."} />
               </div>
               <div>
                 <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Orden</label>
@@ -195,12 +200,9 @@ export default function AdminCategorias() {
                   </div>
                 ) : (
                   <button onClick={() => inputRef.current.click()}
-                    style={{ width: '100%', aspectRatio: '16/9', border: '2px dashed var(--borde)', borderRadius: 10, background: 'var(--fondo)', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, color: 'var(--texto-suave)' }}
-                    onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--naranja)'}
-                    onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--borde)'}>
+                    style={{ width: '100%', aspectRatio: '16/9', border: '2px dashed var(--borde)', borderRadius: 10, background: 'var(--fondo)', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, color: 'var(--texto-suave)' }}>
                     <Upload size={24} />
                     <span style={{ fontSize: 13 }}>Subir imagen</span>
-                    <span style={{ fontSize: 11 }}>JPG, PNG — máx. 10MB</span>
                   </button>
                 )}
               </div>
