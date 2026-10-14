@@ -409,6 +409,11 @@ export default function AdminVentas() {
   const topVendidos = [...statsArray].sort((a, b) => b.cantidad - a.cantidad).slice(0, 5); 
   const menosVendidos = [...statsArray].sort((a, b) => a.cantidad - b.cantidad).slice(0, 5); 
 
+  const [paginaActual, setPaginaActual] = useState(1)
+  const [itemsPorPagina, setItemsPorPagina] = useState(50)
+  const limiteValido = Math.max(1, Number(itemsPorPagina) || 50)
+  const lineasPaginadas = lineasFiltradas.slice((paginaActual - 1) * limiteValido, paginaActual * limiteValido)
+
   const totalPeriodo = lineasFiltradas.reduce((a, l) => a + Number(l.subtotal), 0)
   const totalProductos = lineasFiltradas.reduce((a, l) => a + l.cantidad, 0)
   const colorTema = esMiller ? '#7c3aed' : 'var(--naranja)'
