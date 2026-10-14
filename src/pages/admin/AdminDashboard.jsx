@@ -116,9 +116,14 @@ export default function AdminDashboard() {
     cargar()
   }
 
+  const [paginaActual, setPaginaActual] = useState(1)
+  const [itemsPorPagina, setItemsPorPagina] = useState(50)
+  const limiteValido = Math.max(1, Number(itemsPorPagina) || 50)
+
   const bajFiltrado       = filtroCat ? stockBajo.filter(p => p.categoria_id  === filtroCat) : stockBajo
   const ceroFiltrado      = filtroCat ? stockCero.filter(p => p.categoria_id  === filtroCat) : stockCero
   const inactivosFiltrado = filtroCat ? inactivos.filter(p => p.categoria_id === filtroCat) : inactivos
+  const subsPaginadas     = suscripciones.slice((paginaActual - 1) * limiteValido, paginaActual * limiteValido)
 
   const cards = [
     { label: esMiller ? 'Servicios activos' : 'Productos activos', valor: stats.productos, icon: Package, color: esMiller ? '#7c3aed' : 'var(--naranja)' },
