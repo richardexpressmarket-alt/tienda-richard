@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useTienda } from '../../store'
+import Paginador from '../../components/Paginador'
 import { Package, Tag, ShoppingBag, AlertTriangle, XCircle, EyeOff, Clock, Users, Key, ChevronDown, ChevronUp, Send, Copy, RefreshCw, CheckCircle, Cpu } from 'lucide-react'
 import toast from 'react-hot-toast'
 
