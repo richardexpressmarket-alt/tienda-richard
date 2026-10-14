@@ -25,6 +25,10 @@ export default function AdminVentas() {
   const [fechaVenta, setFechaVenta]         = useState(new Date().toISOString().split('T')[0])
   const [guardando, setGuardando]           = useState(false)
 
+  // Paginador (50 por defecto)
+  const [paginaActual, setPaginaActual]     = useState(1)
+  const [itemsPorPagina, setItemsPorPagina] = useState(50)
+
   // Estado para venta de suscripciones digitales en Miller Digital
   const [formDigital, setFormDigital] = useState({
     producto_id: '',
@@ -46,7 +50,10 @@ export default function AdminVentas() {
   })
   const [hasta, setHasta] = useState(() => new Date().toISOString().split('T')[0])
 
-  useEffect(() => { cargar() }, [desde, hasta, tiendaActual])
+  useEffect(() => {
+    setPaginaActual(1)
+    cargar()
+  }, [desde, hasta, tiendaActual])
 
   // Cálculo automático de Fecha de Vencimiento al cambiar Fecha de Compra o Meses
   useEffect(() => {
@@ -66,7 +73,6 @@ export default function AdminVentas() {
       .lte('created_at', hasta + 'T23:59:59')
       .order('created_at', { ascending: false })
     
-    // Filtramos por tienda (los registros antiguos sin columna tienda pertenecen a 'richard')
     const filtradasPorTienda = (data || []).filter(v => (v.tienda || 'richard') === tiendaActual)
     setVentas(filtradasPorTienda)
     setCargando(false)
@@ -190,7 +196,7 @@ export default function AdminVentas() {
         .from('ventas')
         .insert({
           vendedor_id:    perfil?.id || null,
-          tipo:           'digital',
+          tipo:           'fisica',
           tienda:         'miller',
           total:          precioFinal,
           estado:         'completada',
@@ -220,7 +226,6 @@ export default function AdminVentas() {
       })
       if (errI) throw errI
 
-      // Si existe cuenta madre vinculada, actualizamos los cupos usados
       if (formDigital.compra_madre_id) {
         const madre = cuentasMadre.find(m => m.id === formDigital.compra_madre_id)
         if (madre) {
@@ -409,8 +414,6 @@ export default function AdminVentas() {
   const topVendidos = [...statsArray].sort((a, b) => b.cantidad - a.cantidad).slice(0, 5); 
   const menosVendidos = [...statsArray].sort((a, b) => a.cantidad - b.cantidad).slice(0, 5); 
 
-  const [paginaActual, setPaginaActual] = useState(1)
-  const [itemsPorPagina, setItemsPorPagina] = useState(50)
   const limiteValido = Math.max(1, Number(itemsPorPagina) || 50)
   const lineasPaginadas = lineasFiltradas.slice((paginaActual - 1) * limiteValido, paginaActual * limiteValido)
 
@@ -441,7 +444,7 @@ export default function AdminVentas() {
                 <input 
                   type="text" 
                   value={busquedaVentas} 
-                  onChange={e => setBusquedaVentas(e.target.value)} 
+                  onChange={e => { setBusquedaVentas(e.target.value); setPaginaActual(1) }} 
                   placeholder={esMiller ? "Buscar servicio, cliente, correo, plataforma..." : "Buscar producto vendido..."} 
                   style={{ border: 'none', background: 'transparent', width: '100%', outline: 'none', fontSize: 13 }} 
                 />
@@ -465,7 +468,7 @@ export default function AdminVentas() {
 
               <div style={{ marginLeft: 'auto', textAlign: 'right', minWidth: '120px' }}>
                 <p style={{ fontSize: 12, color: 'var(--texto-suave)' }}>{totalProductos} {esMiller ? 'suscripciones' : 'productos vendidos'}</p>
-                <p style={{ fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 18, color: colorTema }}>
+                <p style={{ fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 18, color: esMiller ? '#06b6d4' : colorTema }}>
                   S/ {totalPeriodo.toFixed(2)}
                 </p>
               </div>
@@ -485,82 +488,83 @@ export default function AdminVentas() {
             </div>
           ) : (
             <>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {lineasPaginadas.map((l, idx) => (
-                <div key={l.id || idx} className="card" style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, borderLeft: esMiller ? '4px solid #7c3aed' : 'none' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {lineasPaginadas.map((l, idx) => (
+                  <div key={l.id || idx} className="card" style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, borderLeft: esMiller ? '4px solid #7c3aed' : 'none' }}>
 
-                  {l.productos?.imagen_url
-                    ? <img src={l.productos.imagen_url} alt={l.nombre_producto} style={{ width: 42, height: 42, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }} />
-                    : <div style={{ width: 42, height: 42, borderRadius: 8, background: 'var(--fondo)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <Package size={18} color="var(--borde)" />
+                    {l.productos?.imagen_url
+                      ? <img src={l.productos.imagen_url} alt={l.nombre_producto} style={{ width: 42, height: 42, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }} />
+                      : <div style={{ width: 42, height: 42, borderRadius: 8, background: 'var(--fondo)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <Package size={18} color="var(--borde)" />
+                        </div>
+                    }
+
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <p style={{ fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {l.nombre_producto}
+                        </p>
+                        {esMiller && l.plataforma_venta && (
+                          <span style={{ fontSize: 10, fontWeight: 700, background: 'rgba(124, 58, 237, 0.2)', color: '#c4b5fd', padding: '2px 8px', borderRadius: 12 }}>
+                            {l.plataforma_venta}
+                          </span>
+                        )}
+                        {esMiller && l.duracion_meses && (
+                          <span style={{ fontSize: 10, fontWeight: 700, background: 'rgba(6, 182, 212, 0.2)', color: '#38bdf8', padding: '2px 8px', borderRadius: 12 }}>
+                            {l.duracion_meses} meses
+                          </span>
+                        )}
                       </div>
-                  }
 
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                      <p style={{ fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {l.nombre_producto}
-                      </p>
-                      {esMiller && l.plataforma_venta && (
-                        <span style={{ fontSize: 10, fontWeight: 700, background: '#7c3aed15', color: '#7c3aed', padding: '2px 8px', borderRadius: 12 }}>
-                          {l.plataforma_venta}
-                        </span>
-                      )}
-                      {esMiller && l.duracion_meses && (
-                        <span style={{ fontSize: 10, fontWeight: 700, background: '#06b6d415', color: '#0891b2', padding: '2px 8px', borderRadius: 12 }}>
-                          {l.duracion_meses} meses
-                        </span>
+                      {esMiller ? (
+                        <p style={{ fontSize: 11, color: 'var(--texto-suave)', marginTop: 3, lineHeight: 1.4 }}>
+                          👤 <b style={{ color: 'var(--texto)' }}>{l.cliente_nombre || 'Cliente'}</b> · 📱 {l.cliente_whatsapp || 'S/N'} · ✉️ {l.cliente_correo || 'S/C'}
+                          <br />
+                          📅 Compra: {new Date(l.fecha).toLocaleDateString('es-PE')} · ⏳ <b style={{ color: '#f87171' }}>Vence: {l.fecha_vencimiento || 'N/A'}</b>
+                        </p>
+                      ) : (
+                        <p style={{ fontSize: 11, color: 'var(--texto-suave)', marginTop: 2 }}>
+                          {new Date(l.fecha).toLocaleDateString('es-PE')}
+                          {' · Vendedor: '}{l.vendedor}
+                        </p>
                       )}
                     </div>
 
-                    {esMiller ? (
-                      <p style={{ fontSize: 11, color: 'var(--texto-suave)', marginTop: 3, lineHeight: 1.4 }}>
-                        👤 <b>{l.cliente_nombre || 'Cliente'}</b> · 📱 {l.cliente_whatsapp || 'S/N'} · ✉️ {l.cliente_correo || 'S/C'}
-                        <br />
-                        📅 Compra: {new Date(l.fecha).toLocaleDateString('es-PE')} · ⏳ <b style={{ color: '#dc2626' }}>Vence: {l.fecha_vencimiento || 'N/A'}</b>
-                      </p>
-                    ) : (
-                      <p style={{ fontSize: 11, color: 'var(--texto-suave)', marginTop: 2 }}>
-                        {new Date(l.fecha).toLocaleDateString('es-PE')}
-                        {' · Vendedor: '}{l.vendedor}
-                      </p>
-                    )}
-                  </div>
-
-                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                    {l.cantidad > 1 ? (
-                      <>
-                        <p style={{ fontSize: 11, color: 'var(--texto-suave)' }}>
-                          x{l.cantidad} · S/ {Number(l.precio_unitario).toFixed(2)} c/u
-                        </p>
-                        <p style={{ fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 15, color: colorTema }}>
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      {l.cantidad > 1 ? (
+                        <>
+                          <p style={{ fontSize: 11, color: 'var(--texto-suave)' }}>
+                            x{l.cantidad} · S/ {Number(l.precio_unitario).toFixed(2)} c/u
+                          </p>
+                          <p style={{ fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 15, color: esMiller ? '#06b6d4' : colorTema }}>
+                            S/ {Number(l.subtotal).toFixed(2)}
+                          </p>
+                        </>
+                      ) : (
+                        <p style={{ fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 15, color: esMiller ? '#06b6d4' : 'inherit' }}>
                           S/ {Number(l.subtotal).toFixed(2)}
                         </p>
-                      </>
-                    ) : (
-                      <p style={{ fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 15, color: esMiller ? colorTema : 'inherit' }}>
-                        S/ {Number(l.subtotal).toFixed(2)}
-                      </p>
-                    )}
+                      )}
+                    </div>
+
+                    <button
+                      onClick={() => eliminarVenta(l.id, l.items_count === 1)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, flexShrink: 0, color: '#ef4444' }}>
+                      <Trash2 size={15} />
+                    </button>
+
                   </div>
+                ))}
+              </div>
 
-                  <button
-                    onClick={() => eliminarVenta(l.id, l.items_count === 1)}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, flexShrink: 0, color: '#D00' }}>
-                    <Trash2 size={15} />
-                  </button>
-
-                </div>
-              ))}
-            </div>
-            <Paginador
-              totalItems={lineasFiltradas.length}
-              itemsPorPagina={itemsPorPagina}
-              setItemsPorPagina={setItemsPorPagina}
-              paginaActual={paginaActual}
-              setPaginaActual={setPaginaActual}
-              esMiller={esMiller}
-            />
+              <Paginador
+                totalItems={lineasFiltradas.length}
+                itemsPorPagina={itemsPorPagina}
+                setItemsPorPagina={setItemsPorPagina}
+                paginaActual={paginaActual}
+                setPaginaActual={setPaginaActual}
+                esMiller={esMiller}
+              />
             </>
           )}
         </>
@@ -606,10 +610,10 @@ export default function AdminVentas() {
               <div style={{ height: 300 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={chartDiasData}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eee" />
-                    <XAxis dataKey="Fecha" fontSize={11} tickMargin={10} />
-                    <YAxis fontSize={11} />
-                    <Tooltip cursor={{ fill: '#f3f4f6' }} contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }} />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--borde)" />
+                    <XAxis dataKey="Fecha" fontSize={11} tickMargin={10} stroke="var(--texto-suave)" />
+                    <YAxis fontSize={11} stroke="var(--texto-suave)" />
+                    <Tooltip cursor={{ fill: 'rgba(148,163,184,0.1)' }} contentStyle={{ borderRadius: 8, border: '1px solid var(--borde)', background: 'var(--blanco)', color: 'var(--texto)' }} />
                     <Bar dataKey="Ingreso" fill="#10b981" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -621,10 +625,10 @@ export default function AdminVentas() {
               <div style={{ height: 300 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={chartData} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#eee" />
-                    <XAxis type="number" fontSize={11} />
-                    <YAxis dataKey="name" type="category" width={120} fontSize={10} />
-                    <Tooltip cursor={{ fill: '#f3f4f6' }} contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }} />
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--borde)" />
+                    <XAxis type="number" fontSize={11} stroke="var(--texto-suave)" />
+                    <YAxis dataKey="name" type="category" width={120} fontSize={10} stroke="var(--texto-suave)" />
+                    <Tooltip cursor={{ fill: 'rgba(148,163,184,0.1)' }} contentStyle={{ borderRadius: 8, border: '1px solid var(--borde)', background: 'var(--blanco)', color: 'var(--texto)' }} />
                     <Bar dataKey="Ingreso" fill={esMiller ? '#7c3aed' : '#3b82f6'} radius={[0, 4, 4, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -634,7 +638,7 @@ export default function AdminVentas() {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
             <div className="card" style={{ padding: 20 }}>
-              <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, color: colorTema }}>🔥 Más Vendidos (Unidades)</h3>
+              <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, color: esMiller ? '#06b6d4' : colorTema }}>🔥 Más Vendidos (Unidades)</h3>
               {topVendidos.map((p, i) => (
                 <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--borde)' }}>
                   <span style={{ fontSize: 13, fontWeight: 500 }}>{p.nombre}</span><span style={{ fontSize: 13, fontWeight: 700 }}>{p.cantidad} unid.</span>
@@ -655,10 +659,10 @@ export default function AdminVentas() {
 
       {/* -------------------- MODAL MILLER DIGITAL (VENTA DE SUSCRIPCIONES) -------------------- */}
       {modalVenta && esMiller && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.75)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(2, 6, 23, 0.78)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
           <div className="card" style={{ width: '100%', maxWidth: 540, maxHeight: '92vh', overflowY: 'auto', padding: 24, borderTop: '4px solid #7c3aed' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <h2 style={{ fontFamily: 'var(--fuente-display)', fontWeight: 800, fontSize: 18, color: '#7c3aed' }}>
+              <h2 style={{ fontFamily: 'var(--fuente-display)', fontWeight: 800, fontSize: 18, color: '#a855f7' }}>
                 Registrar Venta de Servicio / Suscripción
               </h2>
               <button onClick={() => setModalVenta(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={20} color="var(--texto-suave)" /></button>
@@ -666,7 +670,7 @@ export default function AdminVentas() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>
-                <label style={{ fontSize: 12, fontWeight: 700, display: 'block', marginBottom: 4 }}>1. Servicio contratado *</label>
+                <label style={{ fontSize: 12, fontWeight: 700, display: 'block', marginBottom: 4, color: 'var(--texto)' }}>1. Servicio contratado *</label>
                 <select 
                   value={formDigital.producto_id} 
                   onChange={e => {
@@ -699,23 +703,23 @@ export default function AdminVentas() {
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <div>
-                  <label style={{ fontSize: 11, fontWeight: 600 }}><User size={12}/> Nombre del Cliente *</label>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--texto)', display: 'block', marginBottom: 4 }}><User size={12}/> Nombre del Cliente *</label>
                   <input type="text" placeholder="Ej: Ariana Villegas" value={formDigital.cliente_nombre} onChange={e => setFormDigital({ ...formDigital, cliente_nombre: e.target.value })} style={{ fontSize: 13 }} />
                 </div>
                 <div>
-                  <label style={{ fontSize: 11, fontWeight: 600 }}><Phone size={12}/> WhatsApp del Cliente *</label>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--texto)', display: 'block', marginBottom: 4 }}><Phone size={12}/> WhatsApp del Cliente *</label>
                   <input type="text" placeholder="Ej: 924545856" value={formDigital.cliente_whatsapp} onChange={e => setFormDigital({ ...formDigital, cliente_whatsapp: e.target.value })} style={{ fontSize: 13 }} />
                 </div>
               </div>
 
               <div>
-                <label style={{ fontSize: 11, fontWeight: 600 }}><Mail size={12}/> Correo del Cliente (donde se activó el servicio) *</label>
+                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--texto)', display: 'block', marginBottom: 4 }}><Mail size={12}/> Correo del Cliente (donde se activó el servicio) *</label>
                 <input type="email" placeholder="cliente@gmail.com" value={formDigital.cliente_correo} onChange={e => setFormDigital({ ...formDigital, cliente_correo: e.target.value })} style={{ fontSize: 13 }} />
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <div>
-                  <label style={{ fontSize: 11, fontWeight: 600 }}><Globe size={12}/> Plataforma de Venta</label>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--texto)', display: 'block', marginBottom: 4 }}><Globe size={12}/> Plataforma de Venta</label>
                   <select value={formDigital.plataforma_venta} onChange={e => setFormDigital({ ...formDigital, plataforma_venta: e.target.value })} style={{ fontSize: 13 }}>
                     <option value="WhatsApp">WhatsApp</option>
                     <option value="Marketplace">Facebook Marketplace</option>
@@ -725,11 +729,12 @@ export default function AdminVentas() {
                   </select>
                 </div>
                 <div>
-                  <label style={{ fontSize: 11, fontWeight: 600 }}>Precio Cobrado (S/) *</label>
-                  <input type="number" step="0.1" value={formDigital.precio} onChange={e => setFormDigital({ ...formDigital, precio: e.target.value })} style={{ fontSize: 14, fontWeight: 800, color: '#7c3aed' }} />
+                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--texto)', display: 'block', marginBottom: 4 }}>Precio Cobrado (S/) *</label>
+                  <input type="number" step="0.1" value={formDigital.precio} onChange={e => setFormDigital({ ...formDigital, precio: e.target.value })} style={{ fontSize: 14, fontWeight: 800, color: '#38bdf8' }} />
                 </div>
               </div>
 
+              {/* Recuadro de Planes Rápidos adaptado a Modo Oscuro y Claro */}
               <div style={{ background: 'var(--fondo)', padding: 14, borderRadius: 10, border: '1px solid var(--borde)' }}>
                 <label style={{ fontSize: 11, fontWeight: 700, display: 'block', marginBottom: 8, color: 'var(--texto)' }}>
                   ⚡ Planes Rápidos (Calcula el vencimiento automático):
@@ -806,7 +811,7 @@ export default function AdminVentas() {
                 <div style={{ flex: 1, overflowY: 'auto', padding: 8 }}>
                   {prodsFiltrados.map(p => (
                     <button key={p.id} onClick={() => agregarAlCarrito(p)} disabled={p.stock < 1}
-                      style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, background: 'none', border: 'none', cursor: p.stock < 1 ? 'not-allowed' : 'pointer', textAlign: 'left', opacity: p.stock < 1 ? 0.5 : 1, marginBottom: 2 }}
+                      style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, background: 'none', border: 'none', cursor: p.stock < 1 ? 'not-allowed' : 'pointer', textAlign: 'left', opacity: p.stock < 1 ? 0.5 : 1, marginBottom: 2, color: 'var(--texto)' }}
                       onMouseEnter={e => p.stock > 0 && (e.currentTarget.style.background = 'var(--naranja-light)')}
                       onMouseLeave={e => e.currentTarget.style.background = 'none'}>
                       {p.imagen_url
@@ -865,7 +870,7 @@ export default function AdminVentas() {
                           S/ {((parseFloat(item.precio) || 0) * item.cantidad).toFixed(2)}
                         </p>
                         <button onClick={() => quitar(item.cartId)}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#D00', padding: '2px' }}>
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: '2px' }}>
                           <X size={13} />
                         </button>
                       </div>
