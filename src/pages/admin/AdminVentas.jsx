@@ -553,6 +553,15 @@ export default function AdminVentas() {
                 </div>
               ))}
             </div>
+            <Paginador
+              totalItems={lineasFiltradas.length}
+              itemsPorPagina={itemsPorPagina}
+              setItemsPorPagina={setItemsPorPagina}
+              paginaActual={paginaActual}
+              setPaginaActual={setPaginaActual}
+              esMiller={esMiller}
+            />
+            </>
           )}
         </>
       )}
