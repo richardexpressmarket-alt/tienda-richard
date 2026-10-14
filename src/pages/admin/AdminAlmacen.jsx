@@ -64,12 +64,20 @@ export default function AdminAlmacen() {
     ? secciones.filter(s => s.sucursal_id === filtroSucursal)
     : secciones
 
+  const { tiendaActual } = useTienda()
+  const [paginaActual, setPaginaActual] = useState(1)
+  const [itemsPorPagina, setItemsPorPagina] = useState(50)
+
   const productosFiltrados = productos.filter(p => {
+    const matchTienda = (p.tienda || 'richard') === tiendaActual
     const matchBusq = p.nombre.toLowerCase().includes(busqueda.toLowerCase())
     const matchSuc  = filtroSucursal ? p.sucursal_id === filtroSucursal : true
     const matchSec  = filtroSeccion  ? p.seccion_id  === filtroSeccion  : true
-    return matchBusq && matchSuc && matchSec
+    return matchTienda && matchBusq && matchSuc && matchSec
   })
+
+  const limiteValido = Math.max(1, Number(itemsPorPagina) || 50)
+  const productosPaginados = productosFiltrados.slice((paginaActual - 1) * limiteValido, paginaActual * limiteValido)
 
   async function actualizarStock(id, nuevoStock) {
     if (nuevoStock < 0) return
