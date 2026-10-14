@@ -484,8 +484,9 @@ export default function AdminVentas() {
               <p>{busquedaVentas ? 'No se encontraron registros con esa búsqueda' : 'No hay ventas en este periodo'}</p>
             </div>
           ) : (
+            <>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {lineasFiltradas.map((l, idx) => (
+              {lineasPaginadas.map((l, idx) => (
                 <div key={l.id || idx} className="card" style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, borderLeft: esMiller ? '4px solid #7c3aed' : 'none' }}>
 
                   {l.productos?.imagen_url
