@@ -387,6 +387,14 @@ export default function AdminAlmacen() {
             </div>
           ))}
         </div>
+        <Paginador
+          totalItems={productosFiltrados.length}
+          itemsPorPagina={itemsPorPagina}
+          setItemsPorPagina={setItemsPorPagina}
+          paginaActual={paginaActual}
+          setPaginaActual={setPaginaActual}
+        />
+        </>
       )}
 
       {/* Modal Sucursal */}
