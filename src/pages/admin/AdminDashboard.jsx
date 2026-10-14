@@ -190,8 +190,9 @@ export default function AdminDashboard() {
                 Aún no hay usuarios con suscripciones registradas.
               </p>
             ) : (
+              <>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {suscripciones.map(s => {
+                {subsPaginadas.map(s => {
                   const dias = calcularDiasRestantes(s.fecha_vencimiento)
                   const urgente = dias <= 5
                   const expandido = expandidoId === s.id
