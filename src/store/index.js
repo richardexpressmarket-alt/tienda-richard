@@ -3,9 +3,11 @@ import { persist } from 'zustand/middleware'
 
 export const useTienda = create(
   persist(
-    (set) => ({
+    (set, get) => ({
       tiendaActual: 'richard', // 'richard' | 'miller'
+      modoOscuro: true,        // Activo por defecto para ambas tiendas
       cambiarTienda: (nuevaTienda) => set({ tiendaActual: nuevaTienda }),
+      toggleModoOscuro: () => set({ modoOscuro: !get().modoOscuro }),
     }),
     { name: 'tienda-seleccionada' }
   )
