@@ -280,8 +280,9 @@ export default function AdminAlmacen() {
           <p>No hay productos en esta sección</p>
         </div>
       ) : (
+        <>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {productosFiltrados.map(p => (
+          {productosPaginados.map(p => (
             <div key={p.id} className="card" style={{ padding: '14px', display: 'flex', flexDirection: 'column', gap: 12, border: p.stock <= p.stock_minimo ? '1px solid #fed7aa' : '1px solid var(--borde)' }}>
               
               {/* Parte Superior: Imagen, Nombre y Switch de Estado */}
