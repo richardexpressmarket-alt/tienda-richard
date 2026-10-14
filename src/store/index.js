@@ -1,6 +1,16 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
+export const useTienda = create(
+  persist(
+    (set) => ({
+      tiendaActual: 'richard', // 'richard' | 'miller'
+      cambiarTienda: (nuevaTienda) => set({ tiendaActual: nuevaTienda }),
+    }),
+    { name: 'tienda-seleccionada' }
+  )
+)
+
 export const useCarrito = create(
   persist(
     (set, get) => ({
@@ -11,7 +21,7 @@ export const useCarrito = create(
         if (existente) {
           set({ items: items.map(i => i.id === producto.id ? { ...i, cantidad: i.cantidad + 1 } : i) })
         } else {
-          set({ items: [...items, { ...producto, cantidad: 1 }] })
+          set({ items: [...items, { ...producto, cantidad: 1, tienda: producto.tienda || 'richard' }] })
         }
       },
       quitar: (id) => set({ items: get().items.filter(i => i.id !== id) }),
@@ -20,6 +30,7 @@ export const useCarrito = create(
         set({ items: get().items.map(i => i.id === id ? { ...i, cantidad } : i) })
       },
       limpiar: () => set({ items: [] }),
+      limpiarPorTienda: (tienda) => set({ items: get().items.filter(i => (i.tienda || 'richard') !== tienda) }),
       total: () => get().items.reduce((acc, i) => acc + i.precio * i.cantidad, 0),
       cantidad: () => get().items.reduce((acc, i) => acc + i.cantidad, 0),
     }),
