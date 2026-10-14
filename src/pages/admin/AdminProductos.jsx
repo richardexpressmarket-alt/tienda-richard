@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { Plus, Pencil, Trash2, Upload, X, Package, Search, Download } from 'lucide-react'
+import { useTienda } from '../../store'
+import { Plus, Pencil, Trash2, Upload, X, Package, Search, Download, Cpu } from 'lucide-react'
 import { exportarCSV } from '../../lib/exportar'
 import toast from 'react-hot-toast'
 
@@ -11,9 +12,14 @@ const vacioForm = {
   categoria_id: '', activo: true, codigo_barras: ''
 }
 
-const UNIDADES = ['unidad', 'kg', 'g', 'lt', 'ml', 'docena', 'paquete', 'caja', 'bolsa']
+const UNIDADES_FISICAS = ['unidad', 'kg', 'g', 'lt', 'ml', 'docena', 'paquete', 'caja', 'bolsa']
+const UNIDADES_DIGITALES = ['meses', 'mes', 'año', 'cuenta', 'cupo', 'licencia', 'servicio']
 
 export default function AdminProductos() {
+  const { tiendaActual } = useTienda()
+  const esMiller = tiendaActual === 'miller'
+  const UNIDADES = esMiller ? [...UNIDADES_DIGITALES, ...UNIDADES_FISICAS] : UNIDADES_FISICAS
+
   const [productos, setProductos]   = useState([])
   const [categorias, setCategorias] = useState([])
   const [sucursales, setSucursales] = useState([])
@@ -33,14 +39,13 @@ export default function AdminProductos() {
 
   const [searchParams] = useSearchParams()
 
-  useEffect(() => { cargar() }, [])
+  useEffect(() => { cargar() }, [tiendaActual])
 
   useEffect(() => {
     const editarId = searchParams.get('editar')
     const esNuevo  = searchParams.get('nuevo')
     if (!editarId && !esNuevo) return
     if (esNuevo) { abrirNuevo(); return }
-    // Espera a que carguen los productos y abre el modal
     const intentar = setInterval(() => {
       setProductos(prev => {
         const prod = prev.find(p => p.id === editarId)
@@ -55,14 +60,15 @@ export default function AdminProductos() {
   }, [searchParams])
 
   async function cargar() {
+    setCargando(true)
     const [{ data: prods }, { data: cats }, { data: sucs }, { data: secs }] = await Promise.all([
       supabase.from('productos').select('*, categorias(nombre), sucursales(nombre), secciones(nombre)').order('nombre'),
-      supabase.from('categorias').select('id, nombre').eq('activo', true).order('nombre'),
+      supabase.from('categorias').select('id, nombre, tienda').eq('activo', true).order('nombre'),
       supabase.from('sucursales').select('*').order('nombre'),
       supabase.from('secciones').select('*').order('nombre'),
     ])
-    setProductos(prods || [])
-    setCategorias(cats || [])
+    setProductos((prods || []).filter(p => (p.tienda || 'richard') === tiendaActual))
+    setCategorias((cats || []).filter(c => (c.tienda || 'richard') === tiendaActual))
     setSucursales(sucs || [])
     setSecciones(secs || [])
     setCargando(false)
@@ -73,14 +79,13 @@ export default function AdminProductos() {
     return `${cantidad} ${unidad}`
   }
 
-  // Secciones filtradas por sucursal seleccionada en el form
   const seccionesDelForm = form.sucursal_id
     ? secciones.filter(s => s.sucursal_id === form.sucursal_id)
     : secciones
 
   function abrirNuevo() {
     const primeraS = sucursales[0]?.id || ''
-    setForm({ ...vacioForm, sucursal_id: primeraS })
+    setForm({ ...vacioForm, unidad: esMiller ? 'meses' : 'unidad', sucursal_id: esMiller ? '' : primeraS })
     setEditando(null)
     setImagenPreview(null)
     setImagenFile(null)
@@ -115,7 +120,7 @@ export default function AdminProductos() {
     setImagenPreview(URL.createObjectURL(file))
   }
 
-async function subirImagen(file, nombre) {
+  async function subirImagen(file, nombre) {
     const ext = file.name.split('.').pop()
     const nombreLimpio = nombre
       .normalize('NFD')
@@ -153,17 +158,18 @@ async function subirImagen(file, nombre) {
         sucursal_id: form.sucursal_id || null,
         seccion_id: form.seccion_id || null,
         activo: form.activo,
+        tienda: tiendaActual,
         codigo_barras: form.codigo_barras || null,
         imagen_url, updated_at: new Date().toISOString()
       }
       if (editando) {
         const { error } = await supabase.from('productos').update(payload).eq('id', editando.id)
         if (error) throw error
-        toast.success('Producto actualizado')
+        toast.success('Actualizado correctamente')
       } else {
         const { error } = await supabase.from('productos').insert(payload)
         if (error) throw error
-        toast.success('Producto creado ✅')
+        toast.success(esMiller ? 'Servicio digital creado 🚀' : 'Producto creado ✅')
       }
       setModalAbierto(false)
       cargar()
@@ -175,14 +181,14 @@ async function subirImagen(file, nombre) {
     if (!confirm(`¿Eliminar "${p.nombre}"?`)) return
     const { error } = await supabase.from('productos').delete().eq('id', p.id)
     if (error) return toast.error('Error al eliminar')
-    toast.success('Producto eliminado')
+    toast.success('Eliminado')
     cargar()
   }
 
   function handleExportar() {
     if (productos.length === 0) return toast.error('No hay productos para exportar')
-    exportarCSV('productos', [
-      ['Nombre', 'Categoría', 'Sucursal', 'Sección', 'Precio (S/)', 'Precio Oferta', 'Unidad', 'Stock', 'Stock Mínimo', 'Código Barras', 'Activo'],
+    exportarCSV(`productos_${tiendaActual}`, [
+      ['Nombre', 'Categoría', 'Sucursal', 'Sección', 'Precio (S/)', 'Precio Oferta', 'Unidad', 'Stock / Cupos', 'Stock Mínimo', 'Código Barras', 'Activo'],
       ...productos.map(p => [
         p.nombre, p.categorias?.nombre || 'Sin categoría',
         p.sucursales?.nombre || 'Sin sucursal',
@@ -204,24 +210,28 @@ async function subirImagen(file, nombre) {
     return matchBusq && matchCat && matchOferta && matchStock
   })
 
+  const colorPrimario = esMiller ? '#7c3aed' : 'var(--naranja)'
+
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
-        <h1 style={{ fontFamily: 'var(--fuente-display)', fontSize: 24, fontWeight: 800 }}>
-          Productos<span style={{ color: 'var(--naranja)' }}>.</span>
+        <h1 style={{ fontFamily: 'var(--fuente-display)', fontSize: 24, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
+          {esMiller ? <><Cpu size={24} color="#7c3aed" /> Servicios Digitales<span style={{ color: '#06b6d4' }}>.</span></> : <>Productos<span style={{ color: 'var(--naranja)' }}>.</span></>}
         </h1>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={handleExportar} className="btn-ghost" style={{ fontSize: 13 }}>
             <Download size={14} /> Excel
           </button>
-          <button onClick={abrirNuevo} className="btn-primary"><Plus size={16} /> Nuevo producto</button>
+          <button onClick={abrirNuevo} className="btn-primary" style={{ background: esMiller ? 'linear-gradient(135deg, #7c3aed, #06b6d4)' : 'var(--naranja)', border: 'none' }}>
+            <Plus size={16} /> {esMiller ? 'Nuevo servicio' : 'Nuevo producto'}
+          </button>
         </div>
       </div>
 
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
         <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
           <Search size={14} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--texto-suave)' }} />
-          <input value={busqueda} onChange={e => setBusqueda(e.target.value)} placeholder="Buscar producto..." style={{ paddingLeft: 32 }} />
+          <input value={busqueda} onChange={e => setBusqueda(e.target.value)} placeholder={esMiller ? "Buscar servicio (Canva, Google, HBO...)" : "Buscar producto..."} style={{ paddingLeft: 32 }} />
         </div>
         <select value={filtroCat} onChange={e => setFiltroCat(e.target.value)} style={{ minWidth: 160 }}>
           <option value="">Todas las categorías</option>
@@ -232,12 +242,12 @@ async function subirImagen(file, nombre) {
             type="number" min="0"
             value={filtroStock}
             onChange={e => setFiltroStock(e.target.value)}
-            placeholder="Stock exacto..."
+            placeholder={esMiller ? "Cupos exactos..." : "Stock exacto..."}
             style={{ paddingLeft: 12, width: '100%' }}
           />
         </div>
         <button onClick={() => setFiltroOferta(!filtroOferta)}
-          style={{ padding: '9px 14px', borderRadius: 8, border: `1.5px solid ${filtroOferta ? 'var(--naranja)' : 'var(--borde)'}`, background: filtroOferta ? 'var(--naranja-light)' : 'var(--blanco)', color: filtroOferta ? 'var(--naranja)' : 'var(--texto-suave)', fontSize: 13, fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+          style={{ padding: '9px 14px', borderRadius: 8, border: `1.5px solid ${filtroOferta ? colorPrimario : 'var(--borde)'}`, background: filtroOferta ? (esMiller ? '#7c3aed15' : 'var(--naranja-light)') : 'var(--blanco)', color: filtroOferta ? colorPrimario : 'var(--texto-suave)', fontSize: 13, fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap' }}>
           🏷️ Solo ofertas
         </button>
         {(filtroCat || filtroStock !== '' || filtroOferta) && (
@@ -248,7 +258,7 @@ async function subirImagen(file, nombre) {
         )}
       </div>
 
-      <p style={{ fontSize: 13, color: 'var(--texto-suave)', marginBottom: 14 }}>{filtrados.length} productos</p>
+      <p style={{ fontSize: 13, color: 'var(--texto-suave)', marginBottom: 14 }}>{filtrados.length} {esMiller ? 'servicios' : 'productos'}</p>
 
       {cargando ? <div className="spinner" /> : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -265,7 +275,7 @@ async function subirImagen(file, nombre) {
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 2 }}>
                   <span style={{ fontSize: 12, color: 'var(--texto-suave)' }}>{p.categorias?.nombre || 'Sin categoría'}</span>
                   <span style={{ fontSize: 12, color: 'var(--texto-suave)' }}>·</span>
-                  <span style={{ fontSize: 12, color: 'var(--naranja)', fontWeight: 500 }}>{p.unidad}</span>
+                  <span style={{ fontSize: 12, color: colorPrimario, fontWeight: 500 }}>{p.unidad}</span>
                   {p.secciones?.nombre && (
                     <>
                       <span style={{ fontSize: 12, color: 'var(--texto-suave)' }}>·</span>
@@ -275,8 +285,8 @@ async function subirImagen(file, nombre) {
                 </div>
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                <p style={{ fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 16, color: 'var(--naranja)' }}>S/ {Number(p.precio).toFixed(2)}</p>
-                <p style={{ fontSize: 12, color: p.stock <= p.stock_minimo ? '#E65100' : 'var(--texto-suave)' }}>Stock: {p.stock}</p>
+                <p style={{ fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 16, color: colorPrimario }}>S/ {Number(p.precio).toFixed(2)}</p>
+                <p style={{ fontSize: 12, color: p.stock <= p.stock_minimo ? '#E65100' : 'var(--texto-suave)' }}>{esMiller ? 'Cupos' : 'Stock'}: {p.stock}</p>
               </div>
               <span className={`badge ${p.activo ? 'badge-verde' : 'badge-gris'}`} style={{ flexShrink: 0 }}>{p.activo ? 'Activo' : 'Inactivo'}</span>
               <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
@@ -294,7 +304,7 @@ async function subirImagen(file, nombre) {
           <div className="card" style={{ width: '100%', maxWidth: 560, padding: '24px', maxHeight: '92vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
               <h2 style={{ fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 18 }}>
-                {editando ? 'Editar producto' : 'Nuevo producto'}
+                {editando ? (esMiller ? 'Editar servicio' : 'Editar producto') : (esMiller ? 'Nuevo servicio digital' : 'Nuevo producto')}
               </h2>
               <button onClick={() => setModalAbierto(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--texto-suave)' }}><X size={20} /></button>
             </div>
@@ -302,19 +312,19 @@ async function subirImagen(file, nombre) {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div style={{ gridColumn: '1/-1' }}>
                 <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Nombre *</label>
-                <input value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej: Arroz" />
+                <input value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder={esMiller ? "Ej: Canva Pro - Plan 3 Meses" : "Ej: Arroz"} />
               </div>
               <div style={{ gridColumn: '1/-1' }}>
                 <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Descripción</label>
-                <input value={form.descripcion} onChange={e => setForm({ ...form, descripcion: e.target.value })} placeholder="Descripción opcional" />
+                <input value={form.descripcion} onChange={e => setForm({ ...form, descripcion: e.target.value })} placeholder={esMiller ? "Ej: Activación a tu correo personal 100% seguro" : "Descripción opcional"} />
               </div>
 
               {/* Unidad */}
               <div style={{ gridColumn: '1/-1' }}>
                 <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>
-                  Unidad de medida
+                  {esMiller ? 'Duración / Tipo de plan' : 'Unidad de medida'}
                   <span style={{ fontSize: 11, color: 'var(--texto-suave)', marginLeft: 8 }}>
-                    Vista previa: <strong style={{ color: 'var(--naranja)' }}>{etiquetaUnidad(form.unidad, form.cantidad_unidad)}</strong>
+                    Vista previa: <strong style={{ color: colorPrimario }}>{etiquetaUnidad(form.unidad, form.cantidad_unidad)}</strong>
                   </span>
                 </label>
                 <div style={{ display: 'flex', gap: 10 }}>
@@ -343,7 +353,7 @@ async function subirImagen(file, nombre) {
                 </select>
               </div>
               <div>
-                <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Stock actual</label>
+                <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>{esMiller ? 'Cupos en stock' : 'Stock actual'}</label>
                 <input type="number" min="0" value={form.stock} onChange={e => setForm({ ...form, stock: e.target.value })} />
               </div>
               <div>
@@ -355,28 +365,29 @@ async function subirImagen(file, nombre) {
                 <input value={form.codigo_barras} onChange={e => setForm({ ...form, codigo_barras: e.target.value })} placeholder="Opcional" />
               </div>
 
-              {/* Sucursal y Sección */}
-              <div>
-                <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Sucursal</label>
-                <select value={form.sucursal_id}
-                  onChange={e => setForm({ ...form, sucursal_id: e.target.value, seccion_id: '' })}>
-                  <option value="">Sin sucursal</option>
-                  {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>
-                  Sección / Ubicación
-                </label>
-                <select value={form.seccion_id} onChange={e => setForm({ ...form, seccion_id: e.target.value })}>
-                  <option value="">Sin sección</option>
-                  {seccionesDelForm.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-                </select>
-              </div>
+              {!esMiller && (
+                <>
+                  <div>
+                    <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Sucursal</label>
+                    <select value={form.sucursal_id}
+                      onChange={e => setForm({ ...form, sucursal_id: e.target.value, seccion_id: '' })}>
+                      <option value="">Sin sucursal</option>
+                      {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Sección / Ubicación</label>
+                    <select value={form.seccion_id} onChange={e => setForm({ ...form, seccion_id: e.target.value })}>
+                      <option value="">Sin sección</option>
+                      {seccionesDelForm.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+                    </select>
+                  </div>
+                </>
+              )}
 
               {/* Imagen */}
               <div style={{ gridColumn: '1/-1' }}>
-                <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 8, display: 'block' }}>Foto del producto</label>
+                <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 8, display: 'block' }}>Foto del {esMiller ? 'servicio' : 'producto'}</label>
                 <input ref={inputRef} type="file" accept="image/*" onChange={handleImagen} style={{ display: 'none' }} />
                 {imagenPreview ? (
                   <div style={{ position: 'relative', borderRadius: 10, overflow: 'hidden', border: '1px solid var(--borde)', height: 160 }}>
@@ -392,24 +403,22 @@ async function subirImagen(file, nombre) {
                   </div>
                 ) : (
                   <button onClick={() => inputRef.current.click()}
-                    style={{ width: '100%', height: 120, border: '2px dashed var(--borde)', borderRadius: 10, background: 'var(--fondo)', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, color: 'var(--texto-suave)' }}
-                    onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--naranja)'}
-                    onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--borde)'}>
+                    style={{ width: '100%', height: 120, border: '2px dashed var(--borde)', borderRadius: 10, background: 'var(--fondo)', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, color: 'var(--texto-suave)' }}>
                     <Upload size={22} />
-                    <span style={{ fontSize: 13 }}>Subir foto del producto</span>
+                    <span style={{ fontSize: 13 }}>Subir foto</span>
                   </button>
                 )}
               </div>
 
               <div style={{ gridColumn: '1/-1', display: 'flex', alignItems: 'center', gap: 10 }}>
                 <input type="checkbox" id="activop" checked={form.activo} onChange={e => setForm({ ...form, activo: e.target.checked })} style={{ width: 16, height: 16 }} />
-                <label htmlFor="activop" style={{ fontSize: 13, cursor: 'pointer' }}>Producto activo (visible en la tienda)</label>
+                <label htmlFor="activop" style={{ fontSize: 13, cursor: 'pointer' }}>Visible en la tienda</label>
               </div>
 
               <div style={{ gridColumn: '1/-1', display: 'flex', gap: 10, marginTop: 4 }}>
                 <button onClick={() => setModalAbierto(false)} className="btn-ghost" style={{ flex: 1, justifyContent: 'center' }}>Cancelar</button>
-                <button onClick={handleGuardar} className="btn-primary" disabled={subiendo} style={{ flex: 1, justifyContent: 'center', opacity: subiendo ? 0.7 : 1 }}>
-                  {subiendo ? 'Guardando...' : editando ? 'Guardar cambios' : 'Crear producto'}
+                <button onClick={handleGuardar} className="btn-primary" disabled={subiendo} style={{ flex: 1, justifyContent: 'center', opacity: subiendo ? 0.7 : 1, background: colorPrimario, border: 'none' }}>
+                  {subiendo ? 'Guardando...' : editando ? 'Guardar cambios' : 'Crear'}
                 </button>
               </div>
             </div>
